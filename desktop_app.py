@@ -6,6 +6,8 @@ import sys
 import os
 import pystray
 from PIL import Image
+import ctypes
+import multiprocessing
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from main import app
@@ -13,36 +15,41 @@ from main import app
 def run_server():
     uvicorn.run(app, host="127.0.0.1", port=8000, log_level="error")
 
-# --- TRAY & WINDOW LOGIC ---
 def on_minimize():
-    # Itago ang window gikan sa taskbar
     window.hide()
     tray_icon.visible = True
 
 def on_closing():
-    # Kung i-click ang X button, i-hide ang window imbes nga isira ang app
     window.hide()
     tray_icon.visible = True
-    return False # Kini nga 'False' maoy mopugong sa pag-close sa app
+    return False 
 
 def on_show(icon, item):
-    # Itago ang tray icon ug ipakita ang window
     icon.visible = False
-    window.restore() # Ibalik gikan sa minimized/hidden state
-    window.show()    # Ipakita sa front
+    window.restore() 
+    window.show()    
 
 def on_quit(icon, item):
-    # Patyon ang tray ug ang app
     icon.stop()
     window.destroy()
+    os._exit(0) 
 
 if __name__ == '__main__':
-    # 1. Start Server
+    # 1. SINGLE INSTANCE LOCK (Para dili mo-doble ang app ug tray icon)
+    mutex = ctypes.windll.kernel32.CreateMutexW(None, False, "Global\\CS2TrackerMutex")
+    if ctypes.windll.kernel32.GetLastError() == 183: # 183 means "Already Exists"
+        ctypes.windll.user32.MessageBoxW(0, "CS2 Tracker is already running in the system tray.", "App Running", 1)
+        sys.exit(0)
+
+    # 2. Freeze support para sa PyInstaller
+    multiprocessing.freeze_support()
+
+    # 3. Start Server
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
     time.sleep(1.5)
 
-    # 2. Setup Window
+    # 4. Setup Window
     window = webview.create_window(
         title='CS2 Account Tracker', 
         url='http://127.0.0.1:8000', 
@@ -51,7 +58,7 @@ if __name__ == '__main__':
         background_color='#0f172a'
     )
 
-    # 3. Setup System Tray Icon
+    # 5. Setup System Tray Icon
     if getattr(sys, 'frozen', False):
         application_path = sys._MEIPASS
     else:
@@ -70,9 +77,9 @@ if __name__ == '__main__':
     
     threading.Thread(target=tray_icon.run, daemon=True).start()
 
-    # 4. I-connect ang Events
+    # 6. I-connect ang Events
     window.events.minimized += on_minimize
-    window.events.closing += on_closing # Nakig-intercept sa X button
+    window.events.closing += on_closing 
 
-    # 5. Start Webview
+    # 7. Start Webview
     webview.start()

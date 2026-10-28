@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CS2 Tracker - V2.0 (Auto-Update)</title>
+    <title>CS2 Tracker - V2.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #0f172a; color: #e2e8f0; }
@@ -29,8 +29,20 @@
     <!-- UPDATE BANNER -->
     <div id="update-banner" class="hidden bg-blue-600 text-white px-4 py-2 text-center text-sm font-bold shadow-lg fixed top-0 left-0 w-full z-[60] flex justify-center items-center gap-4">
         <span>🎉 A new version of CS2 Tracker is available!</span>
-        <a href="#" id="update-link" target="_blank" class="bg-white text-blue-600 px-3 py-1 rounded hover:bg-slate-100 transition">Download Update</a>
-        <button onclick="document.getElementById('update-banner').classList.add('hidden')" class="ml-4 text-white hover:text-slate-300">&times;</button>
+        <button onclick="startUpdate()" id="update-btn" class="bg-white text-blue-600 px-3 py-1 rounded hover:bg-slate-100 transition font-bold">Update Now</button>
+        <button onclick="dismissBanner()" class="ml-4 text-white hover:text-slate-300 text-xl font-bold">&times;</button>
+    </div>
+
+    <!-- UPDATE PROGRESS MODAL -->
+    <div id="update-modal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-md z-[200] flex items-center justify-center">
+        <div class="bg-slate-800 p-8 rounded-xl border border-blue-500/50 shadow-[0_0_30px_rgba(59,130,246,0.3)] text-center max-w-sm w-full mx-4">
+            <svg id="update-spinner" class="w-16 h-16 text-blue-500 animate-spin mx-auto mb-4" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <h2 class="text-2xl font-bold text-white mb-2">Downloading Update</h2>
+            <p id="update-status" class="text-slate-400 text-sm">Please wait while the new version is being downloaded...</p>
+        </div>
     </div>
 
     <!-- LOCK SCREEN OVERLAY -->
@@ -64,7 +76,6 @@
                 </label>
                 <button onclick="openModal()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-6 py-2 rounded shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all">+ Add Account</button>
                 
-                <!-- SETTINGS & LOCK BUTTONS -->
                 <button onclick="openSettings()" class="bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-2 rounded transition-all text-sm border border-slate-600" title="Settings">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                 </button>
@@ -205,31 +216,79 @@
     <div id="toast-container" class="fixed bottom-4 right-4 z-[110] flex flex-col gap-2"></div>
 
     <script>
-        // --- VERSION CONTROL (Ilisi ni kada mag-release kag bag-o) ---
+        // --- VERSION CONTROL ---
         const CURRENT_VERSION = "1.0.0";
         const GITHUB_REPO = "kurtjoshuanesi-byte/cs2-tracker";
+        let latestDownloadUrl = null;
 
-        // --- UPDATE CHECKER ---
+        // --- UPDATE CHECKER LOGIC ---
         async function checkForUpdates() {
             try {
                 const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
-                if (!res.ok) return; // Wala pay releases or ni-fail
+                if (!res.ok) return;
                 
                 const data = await res.json();
-                const latestVersion = data.tag_name.replace('v', ''); // e.g., '1.1.0'
-                
-                // Simple version comparison (string comparison works for semantic versioning)
-                if (latestVersion > CURRENT_VERSION) {
-                    document.getElementById('update-banner').classList.remove('hidden');
-                    document.getElementById('update-link').href = data.html_url;
+                const latestVersion = data.tag_name.replace('v', '');
+                const dismissedVersion = localStorage.getItem('dismissed_version');
+
+                if (latestVersion > CURRENT_VERSION && latestVersion !== dismissedVersion) {
+                    const banner = document.getElementById('update-banner');
+                    
+                    if (data.assets && data.assets.length > 0) {
+                        latestDownloadUrl = data.assets[0].browser_download_url;
+                    } else {
+                        latestDownloadUrl = data.html_url;
+                    }
+
+                    window.currentLatestVersion = latestVersion;
+                    banner.classList.remove('hidden');
                 }
             } catch (e) {
                 console.log("Update check failed silently.");
             }
         }
 
+        function dismissBanner() {
+            document.getElementById('update-banner').classList.add('hidden');
+            if (window.currentLatestVersion) {
+                localStorage.setItem('dismissed_version', window.currentLatestVersion);
+            }
+        }
+
+        async function startUpdate() {
+            if (!latestDownloadUrl) return;
+            
+            document.getElementById('update-banner').classList.add('hidden');
+            document.getElementById('update-modal').classList.remove('hidden');
+            document.getElementById('update-spinner').classList.remove('hidden');
+            document.getElementById('update-status').innerText = "Please wait while the new version is being downloaded...";
+            document.getElementById('update-status').classList.remove('text-red-400', 'text-green-400');
+
+            try {
+                const res = await fetch("http://127.0.0.1:8000/api/update-app", {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({url: latestDownloadUrl})
+                });
+
+                if (res.ok) {
+                    document.getElementById('update-status').innerText = "Update downloaded! Restarting app...";
+                    document.getElementById('update-status').classList.add('text-green-400');
+                } else {
+                    const errorData = await res.json();
+                    document.getElementById('update-spinner').classList.add('hidden');
+                    document.getElementById('update-status').innerText = `Error: ${errorData.detail || 'Unknown error'}`;
+                    document.getElementById('update-status').classList.add('text-red-400');
+                }
+            } catch (e) {
+                document.getElementById('update-spinner').classList.add('hidden');
+                document.getElementById('update-status').innerText = "Update server unreachable. Please restart manually.";
+                document.getElementById('update-status').classList.add('text-red-400');
+            }
+        }
+
         // --- PIN LOCK LOGIC ---
-        let appPin = "1234"; // Fallback
+        let appPin = "1234";
 
         async function fetchPin() {
             try {
@@ -682,8 +741,8 @@
 
         // --- INITIAL LOAD ---
         window.addEventListener('DOMContentLoaded', async () => {
-            await fetchPin(); // Kuhaa ang PIN sa database
-            checkForUpdates(); // Check kung naay bag-o sa GitHub
+            await fetchPin(); 
+            checkForUpdates(); 
 
             if (document.getElementById('lock-screen').classList.contains('hidden')) {
                 fetchAccounts();

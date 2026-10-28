@@ -10,6 +10,8 @@ import os
 import datetime
 import threading
 import time
+import requests
+import subprocess
 
 app = FastAPI()
 
@@ -97,6 +99,9 @@ class SettingData(BaseModel):
     key: str
     value: str
 
+class UpdateData(BaseModel):
+    url: str
+
 @app.get("/api/accounts")
 def get_accounts():
     conn = sqlite3.connect(DB_FILE)
@@ -175,7 +180,6 @@ async def import_csv(file: UploadFile = File(...)):
     create_backup() 
     return {"status": "success", "imported": count}
 
-# --- SETTINGS API ---
 @app.get("/api/settings/{key}")
 def get_setting(key: str):
     conn = sqlite3.connect(DB_FILE)
@@ -195,6 +199,48 @@ def update_setting(data: SettingData):
     conn.commit()
     conn.close()
     return {"status": "success"}
+
+@app.post("/api/update-app")
+def update_app(data: UpdateData):
+    download_url = data.url
+    if not download_url:
+        raise HTTPException(status_code=400, detail="No URL provided")
+    
+    try:
+        new_exe_name = "CS2Tracker_update.exe"
+        
+        # Check kung HTML page ba ang gi-download imbes .exe file
+        if download_url.endswith(".html") or ("github.com" in download_url and "releases/download" not in download_url):
+            raise Exception("Invalid download link. Attach a .exe file to your GitHub Release.")
+
+        # Gamita ang requests imbes urllib para smooth ang download
+        response = requests.get(download_url, stream=True)
+        response.raise_for_status()
+
+        with open(new_exe_name, "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+
+        # Buhaton ang updater.bat script
+        bat_script = """
+        @echo off
+        timeout /t 2 /nobreak >nul
+        taskkill /f /im CS2Tracker.exe >nul 2>&1
+        timeout /t 1 /nobreak >nul
+        del CS2Tracker.exe >nul 2>&1
+        ren CS2Tracker_update.exe CS2Tracker.exe
+        start "" CS2Tracker.exe
+        del "%~f0"
+        """
+        with open("updater.bat", "w") as f:
+            f.write(bat_script)
+            
+        subprocess.Popen(["updater.bat"], shell=True)
+        
+        return {"status": "success", "message": "Update downloaded. Restarting..."}
+    except Exception as e:
+        print(f"Update Error: {str(e)}") 
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():
