@@ -1,15 +1,18 @@
 # CS2 Account Tracker
 
-A local-first desktop/web app for tracking CS2 account bans and cooldowns. Keep your accounts organized and never miss a cooldown expiration again.
+A local-first desktop/web app for tracking CS2 G2G account bans and cooldowns. Keep your accounts organized and never miss a cooldown expiration again.
+
+![CS2 Tracker Preview](app.ico) <!-- Pwede nimo ilisan og screenshot puhon -->
 
 ## Features
+- **PIN Lock Security:** Protects your database with a 4-digit PIN (Default: `1234`). Includes a manual lock button.
 - **Real-time countdowns:** Tracks exactly when a ban expires.
 - **10-minute notifications:** Get a Windows popup alert 10 minutes before an account is ready to play.
 - **Filter tabs:** Quickly view All, Banned, or Ready accounts.
 - **Auto-sort:** The account closest to expiring is always at the top.
 - **CSV Import/Export:** Easily move your data from Excel or Google Sheets.
 - **Auto-backup:** Automatically saves a `.csv` backup every hour to the `backups/` folder.
-- **Native Desktop App:** Runs as a standalone `.exe` using PyWebView (no browser address bar).
+- **Native Desktop App:** Runs as a standalone `.exe` with a custom icon using PyWebView (no browser address bar).
 
 ## Requirements
 - Python 3.10 or higher
