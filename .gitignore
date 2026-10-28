@@ -1,0 +1,18 @@
+# --- DATABASE & DATA (AYAW I-UPLOAD) ---
+accounts.db
+*.db
+*.sqlite
+backups/
+
+# --- BUILD FILES ---
+build/
+dist/
+*.spec
+__pycache__/
+*.pyc
+
+# --- SYSTEM ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

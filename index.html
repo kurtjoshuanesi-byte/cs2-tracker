@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CS2 Tracker - V18</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        @keyframes pulse-red {
+            0%, 100% { opacity: 1; text-shadow: 0 0 8px rgba(239, 68, 68, 0.8); }
+            50% { opacity: 0.7; text-shadow: 0 0 2px rgba(239, 68, 68, 0.2); }
+        }
+        .glow-red { animation: pulse-red 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        .copy-btn { transition: all 0.2s; cursor: pointer; }
+        .copy-btn:hover { color: #60a5fa; transform: scale(1.1); }
+        
+        .toast-enter { transform: translateX(100%); opacity: 0; }
+        .toast-enter-active { transform: translateX(0); opacity: 1; transition: all 0.3s ease-out; }
+        .toast-exit { transform: translateX(100%); opacity: 0; transition: all 0.3s ease-in; }
+    </style>
+</head>
+<body class="p-6 min-h-screen relative">
+
+    <div class="max-w-7xl mx-auto pb-10">
+        <!-- Header -->
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+            <div>
+                <h1 class="text-3xl font-black text-white tracking-wider uppercase italic">CS2 Account Tracker</h1>
+                <p class="text-slate-500 text-sm font-mono mt-1">Kode Cooldown Database</p>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="exportCSV()" class="bg-slate-700 hover:bg-slate-600 text-white font-bold px-4 py-2 rounded transition-all text-sm">Export CSV</button>
+                <label class="bg-slate-700 hover:bg-slate-600 text-white font-bold px-4 py-2 rounded transition-all text-sm cursor-pointer">
+                    Import CSV
+                    <input type="file" id="csvInput" accept=".csv" class="hidden" onchange="importCSV(event)">
+                </label>
+                <button onclick="openModal()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-6 py-2 rounded shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all">+ Add Account</button>
+            </div>
+        </div>
+
+        <!-- Stats Dashboard -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-700 shadow-lg">
+                <p class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Total Accounts</p>
+                <p id="stat-total" class="text-2xl font-black text-white">0</p>
+            </div>
+            <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-700 shadow-lg">
+                <p class="text-red-400 text-xs font-bold uppercase tracking-wider mb-1">Banned</p>
+                <p id="stat-banned" class="text-2xl font-black text-red-500">0</p>
+            </div>
+            <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-700 shadow-lg">
+                <p class="text-green-400 text-xs font-bold uppercase tracking-wider mb-1">Ready to Play</p>
+                <p id="stat-ready" class="text-2xl font-black text-green-400">0</p>
+            </div>
+        </div>
+
+        <!-- Controls (Tabs & Search) -->
+        <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+            <div class="flex bg-slate-800 rounded-lg p-1 border border-slate-700 w-full md:w-auto">
+                <button onclick="switchTab('all')" id="tab-all" class="flex-1 md:flex-none px-6 py-2 rounded-md font-bold text-sm transition-all bg-blue-600 text-white">All</button>
+                <button onclick="switchTab('banned')" id="tab-banned" class="flex-1 md:flex-none px-6 py-2 rounded-md font-bold text-sm transition-all text-slate-400 hover:text-white">Banned</button>
+                <button onclick="switchTab('ready')" id="tab-ready" class="flex-1 md:flex-none px-6 py-2 rounded-md font-bold text-sm transition-all text-slate-400 hover:text-white">Ready</button>
+            </div>
+            
+            <div class="relative group w-full md:w-96">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg class="h-5 w-5 text-blue-500 group-focus-within:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                </div>
+                <input type="text" id="searchInput" class="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 font-mono text-sm" placeholder="Search Account ID or Email..." autocomplete="off">
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="bg-slate-800/80 rounded-xl shadow-2xl overflow-x-auto border border-slate-700 backdrop-blur-sm">
+            <table class="w-full text-center text-sm whitespace-nowrap">
+                <thead class="bg-slate-900 border-b border-slate-700">
+                    <tr>
+                        <th class="p-4 text-slate-400 font-bold uppercase tracking-wider text-xs">Account ID</th>
+                        <th class="p-4 text-slate-400 font-bold uppercase tracking-wider text-xs">Password</th>
+                        <th class="p-4 text-slate-400 font-bold uppercase tracking-wider text-xs">Email</th>
+                        <th class="p-4 text-slate-400 font-bold uppercase tracking-wider text-xs">Ban Start</th>
+                        <th class="p-4 text-slate-400 font-bold uppercase tracking-wider text-xs">Status</th>
+                        <th class="p-4 text-slate-400 font-bold uppercase tracking-wider text-xs cursor-pointer hover:text-white transition" onclick="toggleSort()">
+                            Remaining <span id="sort-icon" class="text-slate-500 ml-1">↓</span>
+                        </th>
+                        <th class="p-4 text-slate-400 font-bold uppercase tracking-wider text-xs">Notes</th>
+                        <th class="p-4 text-slate-400 font-bold uppercase tracking-wider text-xs">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body" class="divide-y divide-slate-700/50"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Add/Edit Account Modal -->
+    <div id="modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity">
+        <div class="bg-slate-800 p-6 rounded-xl w-full max-w-md border border-slate-600 shadow-2xl">
+            <h2 id="modalTitle" class="text-2xl font-bold mb-4 text-white">Add Account</h2>
+            <input type="hidden" id="edit_id" value="">
+            
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs text-slate-400 font-bold block mb-1">Account ID</label>
+                    <input type="text" id="acc_id" class="w-full p-2 bg-slate-900 border border-slate-600 rounded text-white focus:border-blue-500 outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-xs text-slate-400 font-bold block mb-1">Password</label>
+                        <input type="text" id="password" class="w-full p-2 bg-slate-900 border border-slate-600 rounded text-white focus:border-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 font-bold block mb-1">Email</label>
+                        <input type="text" id="email" class="w-full p-2 bg-slate-900 border border-slate-600 rounded text-white focus:border-blue-500 outline-none">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-xs text-slate-400 font-bold block mb-1 flex justify-between items-center">
+                            <span>Ban Start <span class="text-[10px] text-slate-500 font-normal">(Ctrl+Shift+Alt+;)</span></span>
+                        </label>
+                        <div class="flex gap-1">
+                            <input type="datetime-local" id="ban_start" class="w-full p-2 bg-slate-900 border border-slate-600 rounded text-white focus:border-blue-500 outline-none">
+                            <button type="button" onclick="setCurrentTime()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-2 rounded transition-all font-bold">Now</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 font-bold block mb-1">Duration (Days)</label>
+                        <input type="number" id="duration" value="7" class="w-full p-2 bg-slate-900 border border-slate-600 rounded text-white focus:border-blue-500 outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 font-bold block mb-1">Notes</label>
+                    <input type="text" id="notes" placeholder="e.g., Bought from seller X" class="w-full p-2 bg-slate-900 border border-slate-600 rounded text-white focus:border-blue-500 outline-none">
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 mt-6">
+                <button onclick="closeModal()" class="px-5 py-2 text-slate-300 hover:text-white transition">Cancel</button>
+                <button onclick="saveAccount()" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded shadow-lg transition">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <script>
+        const API_URL = "http://127.0.0.1:8000/api/accounts";
+        let accountsData = [];
+        let searchQuery = "";
+        let currentTab = 'all';
+        let sortAscending = true; 
+        let notifiedAccounts = new Set(); 
+
+        if ("Notification" in window) {
+            if (Notification.permission !== "granted" && Notification.permission !== "denied") Notification.requestPermission();
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const bgColor = type === 'success' ? 'bg-green-600' : (type === 'error' ? 'bg-red-600' : 'bg-blue-600');
+            toast.className = `${bgColor} text-white px-6 py-3 rounded-lg shadow-2xl font-bold text-sm toast-enter`;
+            toast.innerText = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.classList.add('toast-enter-active'), 10);
+            setTimeout(() => {
+                toast.classList.remove('toast-enter-active');
+                toast.classList.add('toast-exit');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            ['all', 'banned', 'ready'].forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                if (t === tab) {
+                    btn.className = "flex-1 md:flex-none px-6 py-2 rounded-md font-bold text-sm transition-all bg-blue-600 text-white";
+                } else {
+                    btn.className = "flex-1 md:flex-none px-6 py-2 rounded-md font-bold text-sm transition-all text-slate-400 hover:text-white";
+                }
+            });
+            renderTable();
+        }
+
+        function toggleSort() {
+            sortAscending = !sortAscending;
+            document.getElementById('sort-icon').innerText = sortAscending ? '↓' : '↑';
+            renderTable();
+        }
+
+        function setCurrentTime() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            document.getElementById('ban_start').value = `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+
+        window.addEventListener('keydown', function(e) {
+            const modal = document.getElementById('modal');
+            if (!modal.classList.contains('hidden') && e.ctrlKey && e.shiftKey && e.altKey && e.code === 'Semicolon') {
+                e.preventDefault(); 
+                setCurrentTime();
+            }
+        });
+
+        async function fetchAccounts() {
+            try {
+                const res = await fetch(API_URL);
+                accountsData = await res.json();
+                updateStats();
+                renderTable();
+            } catch (err) {
+                showToast("Failed to fetch data", "error");
+            }
+        }
+
+        function updateStats() {
+            const now = new Date().getTime();
+            let bannedCount = 0;
+            let readyCount = 0;
+
+            accountsData.forEach(acc => {
+                if (acc.ban_start && acc.duration_days > 0) {
+                    const expTime = new Date(acc.ban_start).getTime() + (acc.duration_days * 24 * 60 * 60 * 1000);
+                    if (expTime > now) bannedCount++;
+                    else readyCount++;
+                } else {
+                    readyCount++;
+                }
+            });
+
+            document.getElementById('stat-total').innerText = accountsData.length;
+            document.getElementById('stat-banned').innerText = bannedCount;
+            document.getElementById('stat-ready').innerText = readyCount;
+        }
+
+        function formatBanStart(dateString) {
+            if (!dateString) return '-';
+            try {
+                const d = new Date(dateString);
+                if (isNaN(d.getTime())) return dateString.replace('T', ' ');
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                const timeString = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                return `${yyyy}-${mm}-${dd} <br><span class="text-slate-500 text-xs">${timeString}</span>`;
+            } catch (e) {
+                return dateString.replace('T', ' ');
+            }
+        }
+
+        function formatTimeDiff(ms) {
+            if (ms <= 0) return "Playable";
+            const d = Math.floor(ms / (1000 * 60 * 60 * 24));
+            const h = Math.floor((ms / (1000 * 60 * 60)) % 24);
+            const m = Math.floor((ms / 1000 / 60) % 60);
+            const s = Math.floor((ms / 1000) % 60);
+            if (d > 0) return `${d}d ${h}h ${m}m`;
+            return `${h}h ${m}m ${s}s`;
+        }
+
+        function copyToClipboard(text) {
+            if (navigator.clipboard && window.isSecureContext) {
+                return navigator.clipboard.writeText(text);
+            } else {
+                let textArea = document.createElement("textarea");
+                textArea.value = text;
+                textArea.style.position = "absolute";
+                textArea.style.left = "-999999px";
+                document.body.prepend(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                } catch (error) {
+                    console.error(error);
+                } finally {
+                    textArea.remove();
+                }
+                return Promise.resolve();
+            }
+        }
+
+        function copyText(text, element) {
+            copyToClipboard(text).then(() => {
+                const originalHTML = element.innerHTML;
+                element.innerHTML = `<span class="text-green-400 font-bold text-[10px] uppercase">Copied</span>`;
+                setTimeout(() => { element.innerHTML = originalHTML; }, 1500);
+            });
+        }
+
+        function togglePassword(btn, accId) {
+            const span = document.getElementById(`pass-${accId}`);
+            const acc = accountsData.find(a => a.id === accId);
+            span.innerText = span.innerText === "••••••••" ? acc.password : "••••••••";
+        }
+
+        function getProcessedData() {
+            const now = new Date().getTime();
+            let filtered = accountsData.filter(acc => {
+                const matchesSearch = acc.account_id.toLowerCase().includes(searchQuery) || acc.email.toLowerCase().includes(searchQuery);
+                if (!matchesSearch) return false;
+                if (currentTab === 'all') return true;
+                let isBanned = false;
+                if (acc.ban_start && acc.duration_days > 0) {
+                    const expTime = new Date(acc.ban_start).getTime() + (acc.duration_days * 24 * 60 * 60 * 1000);
+                    isBanned = expTime > now;
+                }
+                if (currentTab === 'banned') return isBanned;
+                if (currentTab === 'ready') return !isBanned;
+                return true;
+            });
+
+            filtered.sort((a, b) => {
+                const getRemaining = (acc) => {
+                    if (!acc.ban_start || acc.duration_days <= 0) return Infinity;
+                    const expTime = new Date(acc.ban_start).getTime() + (acc.duration_days * 24 * 60 * 60 * 1000);
+                    const diff = expTime - now;
+                    return diff > 0 ? diff : Infinity;
+                };
+                const diffA = getRemaining(a);
+                const diffB = getRemaining(b);
+                return sortAscending ? diffA - diffB : diffB - diffA;
+            });
+            return filtered;
+        }
+
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            searchQuery = e.target.value.toLowerCase();
+            renderTable();
+        });
+
+        function renderTable() {
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = '';
+            const now = new Date().getTime();
+            const processedData = getProcessedData();
+
+            if (processedData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="p-10 text-center text-slate-500 font-mono italic text-lg">No accounts found</td></tr>`;
+                return;
+            }
+
+            processedData.forEach(acc => {
+                let status = '<span class="text-green-400 font-bold text-sm drop-shadow-[0_0_5px_rgba(34,197,94,0.6)]">READY</span>';
+                let remaining = '<span class="text-green-500/50 text-sm">-</span>';
+                
+                // Gikuha nako ang background tint sa row. Hover na lang ang naa.
+                let rowStyle = "hover:bg-slate-700/30 transition-colors";
+
+                if (acc.ban_start && acc.duration_days > 0) {
+                    const expTime = new Date(acc.ban_start).getTime() + (acc.duration_days * 24 * 60 * 60 * 1000);
+                    const diff = expTime - now;
+                    if (diff > 0) {
+                        status = '<span class="text-red-500 font-bold text-sm glow-red">BANNED</span>';
+                        remaining = `<span class="font-mono text-red-400 font-bold text-sm" data-exp="${expTime}" data-id="${acc.id}" data-acc="${acc.account_id}">${formatTimeDiff(diff)}</span>`;
+                        
+                        if (diff <= 600000 && !notifiedAccounts.has(acc.id)) {
+                            if (Notification.permission === "granted") {
+                                new Notification("CS2 Cooldown Alert ⏰", { 
+                                    body: `Account ${acc.account_id} is ready to play in 10 minutes!` 
+                                });
+                                notifiedAccounts.add(acc.id);
+                            }
+                        }
+                    }
+                }
+
+                tbody.innerHTML += `
+                    <tr class="${rowStyle}">
+                        <td class="p-4 text-white font-mono text-sm tracking-wider">
+                            <div class="flex items-center justify-center gap-2">
+                                <span>${acc.account_id}</span>
+                                <svg onclick="copyText('${acc.account_id}', this)" class="copy-btn w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            </div>
+                        </td>
+                        <td class="p-4 text-slate-400 font-mono text-sm">
+                            <div class="flex items-center justify-center gap-2">
+                                <span id="pass-${acc.id}">••••••••</span>
+                                <svg onclick="togglePassword(this, ${acc.id})" class="copy-btn w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                                <svg onclick="copyText('${acc.password}', this)" class="copy-btn w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            </div>
+                        </td>
+                        <td class="p-4 text-slate-400 font-mono text-sm">${acc.email}</td>
+                        <td class="p-4 text-slate-300 font-mono text-sm">${formatBanStart(acc.ban_start)}</td>
+                        <td class="p-4">${status}</td>
+                        <td class="p-4">${remaining}</td>
+                        <td class="p-4 text-slate-400 font-mono text-sm truncate max-w-[150px]" title="${acc.notes || ''}">${acc.notes || '-'}</td>
+                        <td class="p-4">
+                            <div class="flex items-center justify-center gap-3">
+                                <button onclick="editAccount(${acc.id})" class="text-blue-400 hover:text-blue-300 font-bold text-xs uppercase transition px-2">Edit</button>
+                                <button onclick="deleteAccount(${acc.id})" class="text-slate-500 hover:text-red-400 font-bold text-xs uppercase transition px-2">Delete</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function openModal() {
+            document.getElementById('modalTitle').innerText = "Add Account";
+            document.getElementById('edit_id').value = "";
+            document.getElementById('acc_id').value = '';
+            document.getElementById('email').value = '';
+            document.getElementById('password').value = '';
+            document.getElementById('ban_start').value = '';
+            document.getElementById('notes').value = '';
+            document.getElementById('duration').value = '7';
+            document.getElementById('modal').classList.remove('hidden');
+        }
+
+        function editAccount(id) {
+            const acc = accountsData.find(a => a.id === id);
+            if (!acc) return;
+            document.getElementById('modalTitle').innerText = "Edit Account";
+            document.getElementById('edit_id').value = acc.id;
+            document.getElementById('acc_id').value = acc.account_id;
+            document.getElementById('email').value = acc.email;
+            document.getElementById('password').value = acc.password;
+            document.getElementById('ban_start').value = acc.ban_start || '';
+            document.getElementById('duration').value = acc.duration_days;
+            document.getElementById('notes').value = acc.notes || '';
+            document.getElementById('modal').classList.remove('hidden');
+        }
+
+        function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+
+        async function saveAccount() {
+            const editId = document.getElementById('edit_id').value;
+            const data = {
+                account_id: document.getElementById('acc_id').value,
+                email: document.getElementById('email').value,
+                password: document.getElementById('password').value,
+                ban_start: document.getElementById('ban_start').value || null,
+                duration_days: parseInt(document.getElementById('duration').value) || 0,
+                notes: document.getElementById('notes').value || null
+            };
+            
+            if(!data.account_id) return showToast("Account ID is required", "error");
+
+            try {
+                if (editId) {
+                    await fetch(`${API_URL}/${editId}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
+                } else {
+                    await fetch(API_URL, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
+                }
+                closeModal();
+                showToast(editId ? "Account updated" : "Account added");
+                fetchAccounts();
+            } catch (err) {
+                showToast("Error saving account", "error");
+            }
+        }
+
+        async function deleteAccount(id) {
+            if(confirm("Are you sure you want to delete this account?")) {
+                await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+                showToast("Account deleted");
+                fetchAccounts();
+            }
+        }
+
+        function exportCSV() {
+            if (accountsData.length === 0) return showToast("No data to export", "error");
+            const headers = ["account_id", "email", "password", "ban_start", "duration_days", "notes"];
+            const rows = accountsData.map(acc => 
+                headers.map(h => `"${(acc[h] || '').toString().replace(/"/g, '""')}"`).join(",")
+            );
+            const csvContent = headers.join(",") + "\n" + rows.join("\n");
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.setAttribute("href", URL.createObjectURL(blob));
+            link.setAttribute("download", "cs2_accounts.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast("CSV Exported");
+        }
+
+        async function importCSV(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const formData = new FormData();
+            formData.append("file", file);
+            try {
+                const res = await fetch("http://127.0.0.1:8000/api/import", { method: "POST", body: formData });
+                const result = await res.json();
+                showToast(`Imported ${result.imported} accounts`);
+                fetchAccounts();
+            } catch (err) {
+                showToast("Error importing CSV", "error");
+            }
+            event.target.value = ''; 
+        }
+
+        setInterval(() => {
+            const now = new Date().getTime();
+            let needsRefresh = false;
+            
+            document.querySelectorAll('[data-exp]').forEach(el => {
+                const expTime = parseInt(el.getAttribute('data-exp'));
+                const diff = expTime - now;
+                if (diff <= 0) needsRefresh = true;
+                else el.innerText = formatTimeDiff(diff);
+            });
+
+            if (needsRefresh) {
+                fetchAccounts();
+            } else {
+                updateStats();
+            }
+        }, 1000);
+
+        fetchAccounts();
+    </script>
+</body>
+</html>
