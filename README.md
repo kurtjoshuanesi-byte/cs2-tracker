@@ -1,6 +1,6 @@
 # CS2 Account Tracker
 
-A local-first desktop/web app for tracking CS2 G2G account bans and cooldowns. Keep your accounts organized and never miss a cooldown expiration again.
+A local-first desktop/web app for tracking CS2 account bans and cooldowns. Keep your accounts organized and never miss a cooldown expiration again.
 
 ## Features
 - **Real-time countdowns:** Tracks exactly when a ban expires.
