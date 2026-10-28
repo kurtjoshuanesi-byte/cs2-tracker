@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CS2 Tracker - V2.3</title>
+    <title>CS2 Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #0f172a; color: #e2e8f0; }
@@ -57,6 +57,7 @@
             <p id="pin-error" class="hidden text-red-500 font-bold text-sm mb-4">Incorrect PIN. Try again.</p>
             
             <button onclick="unlockApp()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg shadow-lg transition-all">Unlock</button>
+            <p class="text-xs text-slate-500 font-mono mt-4">v<span id="lock-version"></span></p>
         </div>
     </div>
 
@@ -65,7 +66,11 @@
         <!-- Header -->
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
-                <h1 class="text-3xl font-black text-white tracking-wider uppercase italic">CS2 Account Tracker</h1>
+                <div class="flex items-center gap-3">
+                    <h1 class="text-3xl font-black text-white tracking-wider uppercase italic">CS2 Account Tracker</h1>
+                    <!-- VERSION BADGE -->
+                    <span id="header-version-badge" class="bg-blue-900/40 text-blue-300 text-xs font-bold px-2 py-1 rounded border border-blue-700/50 tracking-wider font-mono">v0.0.0</span>
+                </div>
                 <p class="text-slate-500 text-sm font-mono mt-1">G2G Cooldown Database</p>
             </div>
             <div class="flex flex-wrap gap-2">
@@ -206,9 +211,14 @@
                 <p id="settings-error" class="text-red-500 font-bold text-xs hidden">PINs do not match.</p>
             </div>
             
-            <div class="flex justify-end gap-3">
+            <div class="flex justify-end gap-3 mb-4">
                 <button onclick="closeSettings()" class="px-4 py-2 text-slate-300 hover:text-white transition text-sm">Cancel</button>
                 <button onclick="savePin()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded text-sm shadow-lg transition">Update PIN</button>
+            </div>
+
+            <!-- VERSION SA SETTINGS MODAL -->
+            <div class="border-t border-slate-700 pt-3 text-center">
+                <p class="text-xs text-slate-500 font-mono">Version <span id="settings-version">0.0.0</span></p>
             </div>
         </div>
     </div>
@@ -217,9 +227,18 @@
 
     <script>
         // --- VERSION CONTROL ---
-        const CURRENT_VERSION = "1.1.0";
+        // MAO NI ANG ILISAN NIMO KADA BAG-ONG UPDATE
+        const CURRENT_VERSION = "1.2.0"; 
         const GITHUB_REPO = "kurtjoshuanesi-byte/cs2-tracker";
         let latestDownloadUrl = null;
+
+        // --- IPAKITA ANG VERSION SA UI ---
+        window.addEventListener('DOMContentLoaded', () => {
+            const displayVersion = `v${CURRENT_VERSION}`;
+            document.getElementById('header-version-badge').innerText = displayVersion;
+            document.getElementById('lock-version').innerText = displayVersion;
+            document.getElementById('settings-version').innerText = displayVersion;
+        });
 
         // --- UPDATE CHECKER LOGIC ---
         async function checkForUpdates() {
