@@ -68,7 +68,6 @@
             <div>
                 <div class="flex items-center gap-3">
                     <h1 class="text-3xl font-black text-white tracking-wider uppercase italic">CS2 Account Tracker</h1>
-                    <!-- VERSION BADGE -->
                     <span id="header-version-badge" class="bg-blue-900/40 text-blue-300 text-xs font-bold px-2 py-1 rounded border border-blue-700/50 tracking-wider font-mono">v0.0.0</span>
                 </div>
                 <p class="text-slate-500 text-sm font-mono mt-1">G2G Cooldown Database</p>
@@ -227,7 +226,6 @@
 
     <script>
         // --- VERSION CONTROL ---
-        // MAO NI ANG ILISAN NIMO KADA BAG-ONG UPDATE
         const CURRENT_VERSION = "1.1.0"; 
         const GITHUB_REPO = "kurtjoshuanesi-byte/cs2-tracker";
         let latestDownloadUrl = null;
@@ -250,6 +248,7 @@
                 const latestVersion = data.tag_name.replace('v', '');
                 const dismissedVersion = localStorage.getItem('dismissed_version');
 
+                // Kung mas taas ang sa GitHub ug wala pa na-dismiss
                 if (latestVersion > CURRENT_VERSION && latestVersion !== dismissedVersion) {
                     const banner = document.getElementById('update-banner');
                     
@@ -277,6 +276,9 @@
         async function startUpdate() {
             if (!latestDownloadUrl) return;
             
+            // PINAKA-IMPORTANTE: I-save dayon nga gi-dismiss na ni para dili na mobalik ang banner inig-restart
+            localStorage.setItem('dismissed_version', window.currentLatestVersion);
+
             document.getElementById('update-banner').classList.add('hidden');
             document.getElementById('update-modal').classList.remove('hidden');
             document.getElementById('update-spinner').classList.remove('hidden');
