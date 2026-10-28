@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CS2 Tracker - V19 (Secured)</title>
+    <title>CS2 Tracker - V2.0 (Auto-Update)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #0f172a; color: #e2e8f0; }
@@ -26,6 +26,13 @@
 </head>
 <body class="p-6 min-h-screen relative">
 
+    <!-- UPDATE BANNER -->
+    <div id="update-banner" class="hidden bg-blue-600 text-white px-4 py-2 text-center text-sm font-bold shadow-lg fixed top-0 left-0 w-full z-[60] flex justify-center items-center gap-4">
+        <span>🎉 A new version of CS2 Tracker is available!</span>
+        <a href="#" id="update-link" target="_blank" class="bg-white text-blue-600 px-3 py-1 rounded hover:bg-slate-100 transition">Download Update</a>
+        <button onclick="document.getElementById('update-banner').classList.add('hidden')" class="ml-4 text-white hover:text-slate-300">&times;</button>
+    </div>
+
     <!-- LOCK SCREEN OVERLAY -->
     <div id="lock-screen" class="fixed inset-0 bg-slate-900 z-[100] flex flex-col items-center justify-center">
         <div class="bg-slate-800 p-8 rounded-2xl border border-slate-700 shadow-2xl flex flex-col items-center max-w-sm w-full mx-4">
@@ -42,21 +49,25 @@
     </div>
 
     <!-- MAIN APP CONTAINER -->
-    <div class="max-w-7xl mx-auto pb-10">
+    <div class="max-w-7xl mx-auto pb-10 mt-4">
         <!-- Header -->
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
                 <h1 class="text-3xl font-black text-white tracking-wider uppercase italic">CS2 Account Tracker</h1>
                 <p class="text-slate-500 text-sm font-mono mt-1">G2G Cooldown Database</p>
             </div>
-            <div class="flex gap-2">
+            <div class="flex flex-wrap gap-2">
                 <button onclick="exportCSV()" class="bg-slate-700 hover:bg-slate-600 text-white font-bold px-4 py-2 rounded transition-all text-sm">Export CSV</button>
                 <label class="bg-slate-700 hover:bg-slate-600 text-white font-bold px-4 py-2 rounded transition-all text-sm cursor-pointer">
                     Import CSV
                     <input type="file" id="csvInput" accept=".csv" class="hidden" onchange="importCSV(event)">
                 </label>
                 <button onclick="openModal()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-6 py-2 rounded shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all">+ Add Account</button>
-                <!-- BUTANGAN NATO OG LOCK BUTTON PARA MA-LOCK BALIK -->
+                
+                <!-- SETTINGS & LOCK BUTTONS -->
+                <button onclick="openSettings()" class="bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-2 rounded transition-all text-sm border border-slate-600" title="Settings">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                </button>
                 <button onclick="lockApp()" class="bg-red-900/50 hover:bg-red-800 text-red-200 font-bold px-4 py-2 rounded transition-all text-sm border border-red-700">Lock</button>
             </div>
         </div>
@@ -163,19 +174,82 @@
         </div>
     </div>
 
-    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
+    <!-- Settings Modal (Change PIN) -->
+    <div id="settings-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity">
+        <div class="bg-slate-800 p-6 rounded-xl w-full max-w-sm border border-slate-600 shadow-2xl">
+            <h2 class="text-xl font-bold mb-4 text-white">Change PIN</h2>
+            
+            <div class="space-y-3 mb-4">
+                <div>
+                    <label class="text-xs text-slate-400 font-bold block mb-1">Current PIN</label>
+                    <input type="password" id="current-pin" maxlength="4" class="w-full p-2 bg-slate-900 border border-slate-600 rounded text-white focus:border-blue-500 outline-none font-mono tracking-widest">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 font-bold block mb-1">New PIN (4 digits)</label>
+                    <input type="password" id="new-pin" maxlength="4" class="w-full p-2 bg-slate-900 border border-slate-600 rounded text-white focus:border-blue-500 outline-none font-mono tracking-widest">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 font-bold block mb-1">Confirm New PIN</label>
+                    <input type="password" id="confirm-pin" maxlength="4" class="w-full p-2 bg-slate-900 border border-slate-600 rounded text-white focus:border-blue-500 outline-none font-mono tracking-widest">
+                </div>
+                <p id="settings-error" class="text-red-500 font-bold text-xs hidden">PINs do not match.</p>
+            </div>
+            
+            <div class="flex justify-end gap-3">
+                <button onclick="closeSettings()" class="px-4 py-2 text-slate-300 hover:text-white transition text-sm">Cancel</button>
+                <button onclick="savePin()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded text-sm shadow-lg transition">Update PIN</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="fixed bottom-4 right-4 z-[110] flex flex-col gap-2"></div>
 
     <script>
+        // --- VERSION CONTROL (Ilisi ni kada mag-release kag bag-o) ---
+        const CURRENT_VERSION = "1.0.0";
+        const GITHUB_REPO = "kurtjoshuanesi-byte/cs2-tracker";
+
+        // --- UPDATE CHECKER ---
+        async function checkForUpdates() {
+            try {
+                const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
+                if (!res.ok) return; // Wala pay releases or ni-fail
+                
+                const data = await res.json();
+                const latestVersion = data.tag_name.replace('v', ''); // e.g., '1.1.0'
+                
+                // Simple version comparison (string comparison works for semantic versioning)
+                if (latestVersion > CURRENT_VERSION) {
+                    document.getElementById('update-banner').classList.remove('hidden');
+                    document.getElementById('update-link').href = data.html_url;
+                }
+            } catch (e) {
+                console.log("Update check failed silently.");
+            }
+        }
+
         // --- PIN LOCK LOGIC ---
-        const APP_PIN = "1234"; // <--- PWEDE NIMO ILISAN ANG PIN DIRI
+        let appPin = "1234"; // Fallback
+
+        async function fetchPin() {
+            try {
+                const res = await fetch("http://127.0.0.1:8000/api/settings/pin");
+                if (res.ok) {
+                    const data = await res.json();
+                    appPin = data.value;
+                }
+            } catch (e) {
+                console.error("Could not fetch PIN");
+            }
+        }
 
         function unlockApp() {
             const input = document.getElementById('pin-input').value;
-            if (input === APP_PIN) {
+            if (input === appPin) {
                 document.getElementById('lock-screen').classList.add('hidden');
                 document.getElementById('pin-error').classList.add('hidden');
                 document.getElementById('pin-input').value = '';
-                fetchAccounts(); // Load data once unlocked
+                fetchAccounts();
             } else {
                 document.getElementById('pin-error').classList.remove('hidden');
                 document.getElementById('pin-input').value = '';
@@ -188,10 +262,52 @@
             document.getElementById('pin-input').focus();
         }
 
-        // Enter key para mo-unlock
         document.getElementById('pin-input').addEventListener('keypress', function (e) {
             if (e.key === 'Enter') unlockApp();
         });
+
+        // --- SETTINGS LOGIC ---
+        function openSettings() {
+            document.getElementById('current-pin').value = '';
+            document.getElementById('new-pin').value = '';
+            document.getElementById('confirm-pin').value = '';
+            document.getElementById('settings-error').classList.add('hidden');
+            document.getElementById('settings-modal').classList.remove('hidden');
+        }
+
+        function closeSettings() {
+            document.getElementById('settings-modal').classList.add('hidden');
+        }
+
+        async function savePin() {
+            const current = document.getElementById('current-pin').value;
+            const newPin = document.getElementById('new-pin').value;
+            const confirm = document.getElementById('confirm-pin').value;
+
+            if (current !== appPin) {
+                document.getElementById('settings-error').innerText = "Incorrect current PIN.";
+                document.getElementById('settings-error').classList.remove('hidden');
+                return;
+            }
+            if (newPin !== confirm || newPin.length !== 4) {
+                document.getElementById('settings-error').innerText = "New PINs do not match or invalid length.";
+                document.getElementById('settings-error').classList.remove('hidden');
+                return;
+            }
+
+            try {
+                await fetch("http://127.0.0.1:8000/api/settings", {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({key: 'pin', value: newPin})
+                });
+                appPin = newPin;
+                closeSettings();
+                showToast("PIN updated successfully");
+            } catch (e) {
+                showToast("Error updating PIN", "error");
+            }
+        }
         
         // --- APP LOGIC ---
         const API_URL = "http://127.0.0.1:8000/api/accounts";
@@ -545,7 +661,6 @@
         }
 
         setInterval(() => {
-            // Ayaw padayona ang timer kung naka-lock ang screen
             if (!document.getElementById('lock-screen').classList.contains('hidden')) return;
 
             const now = new Date().getTime();
@@ -566,8 +681,10 @@
         }, 1000);
 
         // --- INITIAL LOAD ---
-        // Ayaw i-fetch ang data kung wala pa ma-unlock
-        window.addEventListener('DOMContentLoaded', () => {
+        window.addEventListener('DOMContentLoaded', async () => {
+            await fetchPin(); // Kuhaa ang PIN sa database
+            checkForUpdates(); // Check kung naay bag-o sa GitHub
+
             if (document.getElementById('lock-screen').classList.contains('hidden')) {
                 fetchAccounts();
             } else {

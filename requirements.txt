@@ -2,3 +2,5 @@ fastapi
 uvicorn
 pywebview
 python-multipart
+pystray
+Pillow
