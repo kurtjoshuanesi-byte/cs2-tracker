@@ -22,6 +22,9 @@
         .toast-enter { transform: translateX(100%); opacity: 0; }
         .toast-enter-active { transform: translateX(0); opacity: 1; transition: all 0.3s ease-out; }
         .toast-exit { transform: translateX(100%); opacity: 0; transition: all 0.3s ease-in; }
+        
+        /* Custom styling for time input */
+        input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); }
     </style>
 </head>
 <body class="p-6 min-h-screen relative">
@@ -189,34 +192,64 @@
         </div>
     </div>
 
-    <!-- Settings Modal (Change PIN) -->
+    <!-- Settings Modal (Change PIN & Notifications) -->
     <div id="settings-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity">
-        <div class="bg-slate-800 p-6 rounded-xl w-full max-w-sm border border-slate-600 shadow-2xl">
-            <h2 class="text-xl font-bold mb-4 text-white">Change PIN</h2>
+        <div class="bg-slate-800 p-6 rounded-xl w-full max-w-md border border-slate-600 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h2 class="text-xl font-bold mb-4 text-white border-b border-slate-700 pb-2">App Settings</h2>
             
-            <div class="space-y-3 mb-4">
+            <!-- PIN SECTION -->
+            <h3 class="text-sm font-bold text-blue-400 mb-2 uppercase tracking-wide">Security</h3>
+            <div class="space-y-3 mb-6">
                 <div>
                     <label class="text-xs text-slate-400 font-bold block mb-1">Current PIN</label>
                     <input type="password" id="current-pin" maxlength="4" class="w-full p-2 bg-slate-900 border border-slate-600 rounded text-white focus:border-blue-500 outline-none font-mono tracking-widest">
                 </div>
-                <div>
-                    <label class="text-xs text-slate-400 font-bold block mb-1">New PIN (4 digits)</label>
-                    <input type="password" id="new-pin" maxlength="4" class="w-full p-2 bg-slate-900 border border-slate-600 rounded text-white focus:border-blue-500 outline-none font-mono tracking-widest">
-                </div>
-                <div>
-                    <label class="text-xs text-slate-400 font-bold block mb-1">Confirm New PIN</label>
-                    <input type="password" id="confirm-pin" maxlength="4" class="w-full p-2 bg-slate-900 border border-slate-600 rounded text-white focus:border-blue-500 outline-none font-mono tracking-widest">
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-xs text-slate-400 font-bold block mb-1">New PIN</label>
+                        <input type="password" id="new-pin" maxlength="4" class="w-full p-2 bg-slate-900 border border-slate-600 rounded text-white focus:border-blue-500 outline-none font-mono tracking-widest">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 font-bold block mb-1">Confirm New PIN</label>
+                        <input type="password" id="confirm-pin" maxlength="4" class="w-full p-2 bg-slate-900 border border-slate-600 rounded text-white focus:border-blue-500 outline-none font-mono tracking-widest">
+                    </div>
                 </div>
                 <p id="settings-error" class="text-red-500 font-bold text-xs hidden">PINs do not match.</p>
             </div>
+
+            <!-- NOTIFICATIONS SECTION -->
+            <h3 class="text-sm font-bold text-blue-400 mb-2 uppercase tracking-wide border-t border-slate-700 pt-3">Notifications</h3>
+            <div class="space-y-4 mb-6">
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" id="sound-enabled" class="w-4 h-4 accent-blue-500">
+                    <span class="text-sm font-bold text-slate-300">Enable Audio Sound Alerts</span>
+                </label>
+
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" id="dnd-enabled" class="w-4 h-4 accent-blue-500">
+                    <span class="text-sm font-bold text-slate-300">Enable Quiet Hours (DND)</span>
+                </label>
+
+                <div class="grid grid-cols-2 gap-2 pl-7 opacity-50 transition-opacity" id="dnd-times" style="pointer-events: none;">
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">Start Time</label>
+                        <input type="time" id="dnd-start" value="22:00" class="w-full p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm outline-none">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">End Time</label>
+                        <input type="time" id="dnd-end" value="07:00" class="w-full p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm outline-none">
+                    </div>
+                </div>
+                <p class="text-[10px] text-slate-500 pl-7">During DND, alerts are silenced. You will be notified once DND ends if the account is still relevant.</p>
+            </div>
             
-            <div class="flex justify-end gap-3 mb-4">
+            <div class="flex justify-end gap-3 mt-2 border-t border-slate-700 pt-4">
                 <button onclick="closeSettings()" class="px-4 py-2 text-slate-300 hover:text-white transition text-sm">Cancel</button>
-                <button onclick="savePin()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded text-sm shadow-lg transition">Update PIN</button>
+                <button onclick="saveSettings()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded text-sm shadow-lg transition">Save Settings</button>
             </div>
 
-            <!-- VERSION SA SETTINGS MODAL -->
-            <div class="border-t border-slate-700 pt-3 text-center">
+            <!-- VERSION -->
+            <div class="text-center mt-4">
                 <p class="text-xs text-slate-500 font-mono">Version <span id="settings-version">0.0.0</span></p>
             </div>
         </div>
@@ -226,16 +259,43 @@
 
     <script>
         // --- VERSION CONTROL ---
-        const CURRENT_VERSION = "1.1.0"; 
+        const CURRENT_VERSION = "1.4.0"; 
         const GITHUB_REPO = "kurtjoshuanesi-byte/cs2-tracker";
         let latestDownloadUrl = null;
 
-        // --- IPAKITA ANG VERSION SA UI ---
+        // --- APP SETTINGS STATE ---
+        let appPin = "1234";
+        let soundEnabled = true;
+        let dndEnabled = false;
+        let dndStart = "22:00";
+        let dndEnd = "07:00";
+
+        // --- NOTIFICATION TRACKER ---
+        // Para dili mo-sige balik-balik ang alert kada segundo
+        let sentAlerts = {
+            "1d": new Set(),
+            "2h": new Set(),
+            "10m": new Set(),
+            "ready": new Set()
+        };
+
         window.addEventListener('DOMContentLoaded', () => {
             const displayVersion = `v${CURRENT_VERSION}`;
             document.getElementById('header-version-badge').innerText = displayVersion;
             document.getElementById('lock-version').innerText = displayVersion;
             document.getElementById('settings-version').innerText = displayVersion;
+
+            // DND toggle UI logic
+            document.getElementById('dnd-enabled').addEventListener('change', (e) => {
+                const timesDiv = document.getElementById('dnd-times');
+                if (e.target.checked) {
+                    timesDiv.classList.remove('opacity-50');
+                    timesDiv.style.pointerEvents = 'auto';
+                } else {
+                    timesDiv.classList.add('opacity-50');
+                    timesDiv.style.pointerEvents = 'none';
+                }
+            });
         });
 
         // --- UPDATE CHECKER LOGIC ---
@@ -248,22 +308,17 @@
                 const latestVersion = data.tag_name.replace('v', '');
                 const dismissedVersion = localStorage.getItem('dismissed_version');
 
-                // Kung mas taas ang sa GitHub ug wala pa na-dismiss
                 if (latestVersion > CURRENT_VERSION && latestVersion !== dismissedVersion) {
                     const banner = document.getElementById('update-banner');
-                    
                     if (data.assets && data.assets.length > 0) {
                         latestDownloadUrl = data.assets[0].browser_download_url;
                     } else {
                         latestDownloadUrl = data.html_url;
                     }
-
                     window.currentLatestVersion = latestVersion;
                     banner.classList.remove('hidden');
                 }
-            } catch (e) {
-                console.log("Update check failed silently.");
-            }
+            } catch (e) {}
         }
 
         function dismissBanner() {
@@ -275,10 +330,7 @@
 
         async function startUpdate() {
             if (!latestDownloadUrl) return;
-            
-            // PINAKA-IMPORTANTE: I-save dayon nga gi-dismiss na ni para dili na mobalik ang banner inig-restart
             localStorage.setItem('dismissed_version', window.currentLatestVersion);
-
             document.getElementById('update-banner').classList.add('hidden');
             document.getElementById('update-modal').classList.remove('hidden');
             document.getElementById('update-spinner').classList.remove('hidden');
@@ -291,7 +343,6 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({url: latestDownloadUrl})
                 });
-
                 if (res.ok) {
                     document.getElementById('update-status').innerText = "Update downloaded! Restarting app...";
                     document.getElementById('update-status').classList.add('text-green-400');
@@ -303,26 +354,38 @@
                 }
             } catch (e) {
                 document.getElementById('update-spinner').classList.add('hidden');
-                document.getElementById('update-status').innerText = "Update server unreachable. Please restart manually.";
+                document.getElementById('update-status').innerText = "Update server unreachable.";
                 document.getElementById('update-status').classList.add('text-red-400');
             }
         }
 
-        // --- PIN LOCK LOGIC ---
-        let appPin = "1234";
-
-        async function fetchPin() {
+        // --- FETCH SETTINGS ---
+        async function fetchSettings() {
             try {
-                const res = await fetch("http://127.0.0.1:8000/api/settings/pin");
-                if (res.ok) {
-                    const data = await res.json();
-                    appPin = data.value;
-                }
-            } catch (e) {
-                console.error("Could not fetch PIN");
-            }
+                // PIN
+                const resPin = await fetch("http://127.0.0.1:8000/api/settings/pin");
+                if (resPin.ok) appPin = (await resPin.json()).value;
+
+                // Sound
+                const resSound = await fetch("http://127.0.0.1:8000/api/settings/sound_enabled");
+                if (resSound.ok) soundEnabled = (await resSound.json()).value === "true";
+
+                // DND Enabled
+                const resDnd = await fetch("http://127.0.0.1:8000/api/settings/dnd_enabled");
+                if (resDnd.ok) dndEnabled = (await resDnd.json()).value === "true";
+
+                // DND Start
+                const resStart = await fetch("http://127.0.0.1:8000/api/settings/dnd_start");
+                if (resStart.ok) dndStart = (await resStart.json()).value;
+
+                // DND End
+                const resEnd = await fetch("http://127.0.0.1:8000/api/settings/dnd_end");
+                if (resEnd.ok) dndEnd = (await resEnd.json()).value;
+
+            } catch (e) { console.error("Could not fetch settings"); }
         }
 
+        // --- LOCK LOGIC ---
         function unlockApp() {
             const input = document.getElementById('pin-input').value;
             if (input === appPin) {
@@ -346,12 +409,27 @@
             if (e.key === 'Enter') unlockApp();
         });
 
-        // --- SETTINGS LOGIC ---
+        // --- SETTINGS UI ---
         function openSettings() {
             document.getElementById('current-pin').value = '';
             document.getElementById('new-pin').value = '';
             document.getElementById('confirm-pin').value = '';
             document.getElementById('settings-error').classList.add('hidden');
+
+            document.getElementById('sound-enabled').checked = soundEnabled;
+            document.getElementById('dnd-enabled').checked = dndEnabled;
+            document.getElementById('dnd-start').value = dndStart;
+            document.getElementById('dnd-end').value = dndEnd;
+
+            const timesDiv = document.getElementById('dnd-times');
+            if (dndEnabled) {
+                timesDiv.classList.remove('opacity-50');
+                timesDiv.style.pointerEvents = 'auto';
+            } else {
+                timesDiv.classList.add('opacity-50');
+                timesDiv.style.pointerEvents = 'none';
+            }
+
             document.getElementById('settings-modal').classList.remove('hidden');
         }
 
@@ -359,43 +437,151 @@
             document.getElementById('settings-modal').classList.add('hidden');
         }
 
-        async function savePin() {
+        async function saveSettings() {
             const current = document.getElementById('current-pin').value;
             const newPin = document.getElementById('new-pin').value;
             const confirm = document.getElementById('confirm-pin').value;
 
-            if (current !== appPin) {
-                document.getElementById('settings-error').innerText = "Incorrect current PIN.";
-                document.getElementById('settings-error').classList.remove('hidden');
-                return;
-            }
-            if (newPin !== confirm || newPin.length !== 4) {
-                document.getElementById('settings-error').innerText = "New PINs do not match or invalid length.";
-                document.getElementById('settings-error').classList.remove('hidden');
-                return;
+            // Check if user is trying to change PIN
+            if (newPin || confirm || current) {
+                if (current !== appPin) {
+                    document.getElementById('settings-error').innerText = "Incorrect current PIN.";
+                    document.getElementById('settings-error').classList.remove('hidden');
+                    return;
+                }
+                if (newPin !== confirm || newPin.length !== 4) {
+                    document.getElementById('settings-error').innerText = "New PINs do not match or invalid length.";
+                    document.getElementById('settings-error').classList.remove('hidden');
+                    return;
+                }
+                appPin = newPin;
             }
 
+            // Save notifications settings
+            soundEnabled = document.getElementById('sound-enabled').checked;
+            dndEnabled = document.getElementById('dnd-enabled').checked;
+            dndStart = document.getElementById('dnd-start').value;
+            dndEnd = document.getElementById('dnd-end').value;
+
             try {
-                await fetch("http://127.0.0.1:8000/api/settings", {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({key: 'pin', value: newPin})
-                });
-                appPin = newPin;
+                // Save to DB
+                const saveToDb = async (key, val) => {
+                    await fetch("http://127.0.0.1:8000/api/settings", {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({key: key, value: val.toString()})
+                    });
+                };
+
+                await saveToDb('pin', appPin);
+                await saveToDb('sound_enabled', soundEnabled);
+                await saveToDb('dnd_enabled', dndEnabled);
+                await saveToDb('dnd_start', dndStart);
+                await saveToDb('dnd_end', dndEnd);
+
                 closeSettings();
-                showToast("PIN updated successfully");
+                showToast("Settings saved successfully");
             } catch (e) {
-                showToast("Error updating PIN", "error");
+                showToast("Error saving settings", "error");
             }
         }
-        
+
+        // --- NOTIFICATION ENGINE ---
+        function playBeep() {
+            if (!soundEnabled) return;
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.5);
+            } catch (e) { console.log("Audio blocked by browser."); }
+        }
+
+        function triggerAlert(acc, timeLabel, message) {
+            if (Notification.permission === "granted") {
+                new Notification(`⏰ CS2 Alert: ${timeLabel}`, { 
+                    body: `Account ${acc.account_id} is ${message}` 
+                });
+            }
+            playBeep();
+        }
+
+        function checkAlerts() {
+            if (!document.getElementById('lock-screen').classList.contains('hidden')) return;
+            
+            const now = new Date();
+            const nowMs = now.getTime();
+            
+            // Check DND
+            let inDnd = false;
+            if (dndEnabled) {
+                const parseTime = (t) => {
+                    const [h, m] = t.split(':').map(Number);
+                    return h * 60 + m;
+                };
+                const currentMins = now.getHours() * 60 + now.getMinutes();
+                const startMins = parseTime(dndStart);
+                const endMins = parseTime(dndEnd);
+
+                if (startMins <= endMins) {
+                    inDnd = currentMins >= startMins && currentMins <= endMins;
+                } else {
+                    // Overnight DND (e.g. 22:00 to 07:00)
+                    inDnd = currentMins >= startMins || currentMins <= endMins;
+                }
+            }
+
+            accountsData.forEach(acc => {
+                if (acc.ban_start && acc.duration_days > 0) {
+                    const expTime = new Date(acc.ban_start).getTime() + (acc.duration_days * 24 * 60 * 60 * 1000);
+                    const diff = expTime - nowMs;
+
+                    // Kung DND, ayaw lang sa i-trigger, unya na kung human sa DND
+                    if (inDnd) return;
+
+                    // 1 Day (86,400,000 ms)
+                    if (diff > 7200000 && diff <= 86400000 && !sentAlerts["1d"].has(acc.id)) {
+                        triggerAlert(acc, "1 Day", "ready in 1 day");
+                        sentAlerts["1d"].add(acc.id);
+                    }
+                    
+                    // 2 Hours (7,200,000 ms)
+                    if (diff > 600000 && diff <= 7200000 && !sentAlerts["2h"].has(acc.id)) {
+                        triggerAlert(acc, "2 Hours", "ready in 2 hours");
+                        sentAlerts["2h"].add(acc.id);
+                    }
+
+                    // 10 Minutes (600,000 ms)
+                    if (diff > 0 && diff <= 600000 && !sentAlerts["10m"].has(acc.id)) {
+                        triggerAlert(acc, "10 Minutes", "ready in 10 minutes!");
+                        sentAlerts["10m"].add(acc.id);
+                    }
+
+                    // Expired / Ready Now
+                    if (diff <= 0 && !sentAlerts["ready"].has(acc.id)) {
+                        triggerAlert(acc, "Ready Now", "is now ready to play!");
+                        sentAlerts["ready"].add(acc.id);
+                    }
+                }
+            });
+        }
+
         // --- APP LOGIC ---
         const API_URL = "http://127.0.0.1:8000/api/accounts";
         let accountsData = [];
         let searchQuery = "";
         let currentTab = 'all';
         let sortAscending = true; 
-        let notifiedAccounts = new Set(); 
 
         if ("Notification" in window) {
             if (Notification.permission !== "granted" && Notification.permission !== "denied") Notification.requestPermission();
@@ -459,6 +645,7 @@
                 accountsData = await res.json();
                 updateStats();
                 renderTable();
+                checkAlerts(); // Initial check
             } catch (err) {
                 showToast("Failed to fetch data", "error");
             }
@@ -601,15 +788,6 @@
                     if (diff > 0) {
                         status = '<span class="text-red-500 font-bold text-sm glow-red">BANNED</span>';
                         remaining = `<span class="font-mono text-red-400 font-bold text-sm" data-exp="${expTime}" data-id="${acc.id}" data-acc="${acc.account_id}">${formatTimeDiff(diff)}</span>`;
-                        
-                        if (diff <= 600000 && !notifiedAccounts.has(acc.id)) {
-                            if (Notification.permission === "granted") {
-                                new Notification("CS2 Cooldown Alert ⏰", { 
-                                    body: `Account ${acc.account_id} is ready to play in 10 minutes!` 
-                                });
-                                notifiedAccounts.add(acc.id);
-                            }
-                        }
                     }
                 }
 
@@ -667,6 +845,13 @@
             document.getElementById('ban_start').value = acc.ban_start || '';
             document.getElementById('duration').value = acc.duration_days;
             document.getElementById('notes').value = acc.notes || '';
+            
+            // Tangtanga sa sent alerts kay basin na-change ang time
+            sentAlerts["1d"].delete(acc.id);
+            sentAlerts["2h"].delete(acc.id);
+            sentAlerts["10m"].delete(acc.id);
+            sentAlerts["ready"].delete(acc.id);
+
             document.getElementById('modal').classList.remove('hidden');
         }
 
@@ -703,6 +888,13 @@
             if(confirm("Are you sure you want to delete this account?")) {
                 await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
                 showToast("Account deleted");
+                
+                // Clear from alerts
+                sentAlerts["1d"].delete(id);
+                sentAlerts["2h"].delete(id);
+                sentAlerts["10m"].delete(id);
+                sentAlerts["ready"].delete(id);
+
                 fetchAccounts();
             }
         }
@@ -740,6 +932,7 @@
             event.target.value = ''; 
         }
 
+        // Global interval (Runs every second)
         setInterval(() => {
             if (!document.getElementById('lock-screen').classList.contains('hidden')) return;
 
@@ -753,6 +946,9 @@
                 else el.innerText = formatTimeDiff(diff);
             });
 
+            // Check alerts every second
+            checkAlerts();
+
             if (needsRefresh) {
                 fetchAccounts();
             } else {
@@ -762,7 +958,7 @@
 
         // --- INITIAL LOAD ---
         window.addEventListener('DOMContentLoaded', async () => {
-            await fetchPin(); 
+            await fetchSettings(); 
             checkForUpdates(); 
 
             if (document.getElementById('lock-screen').classList.contains('hidden')) {
