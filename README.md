@@ -39,9 +39,9 @@ pip install -r requirements.txt
 python main.py
 ```
 
-4. **Open your browser and go to http://127.0.0.1:8000**
+**Open your browser and go to http://127.0.0.1:8000**
 
-Run the Desktop App:
+4. **Run the Desktop App:**
 
 ```bash
 python desktop_app.py
