@@ -29,23 +29,32 @@ A local-first desktop/web app for tracking CS2 G2G account bans and cooldowns. K
 
 2. **Install dependencies:**
 
-```pip install -r requirements.txt```
+```bash
+pip install -r requirements.txt
+```
 
 3. **Run the Web Version:**
 
-```python main.py```
+```bash
+python main.py
+```
 
 4. **Open your browser and go to http://127.0.0.1:8000**
 
 Run the Desktop App:
 
-```python desktop_app.py```
+```bash
+python desktop_app.py
+```
 
 5. **Building the Standalone .exe**
 
 If you want to compile this into a single executable file with the custom icon:
 
-```pip install pyinstallerpy -m PyInstaller --noconsole --onefile --clean --name "CS2Tracker" --icon="app.ico" --add-data "index.html;." --add-data "app.ico;." desktop_app.py```
+```bash
+pip install pyinstaller
+py -m PyInstaller --noconsole --onefile --clean --name "CS2Tracker" --icon="app.ico" --add-data "index.html;." --add-data "app.ico;." desktop_app.py
+```
 
 Note: Move the CS2Tracker.exe from the dist/ folder back to the main folder so it can find the database and backups.
 
@@ -59,7 +68,12 @@ Do not upload your accounts.db or backup files to public repositories. The .giti
 
 Sa imong terminal (siguroa nga naa ka sa `cs2-tracker` folder), i-type ni:
 
-```git add README.md git commit -m "Update README with latest features and instructions" git push origin main```
+```bash
+git add README.md
+git commit -m "Update README with latest features and instructions"
+git push origin main
+```
 
-Kung na-push na ni, i-refresh ang imong GitHub page. Mas propesyonal na kaayo tan-awon ang imong repo kay kompletong naa nay instructions, features, ug disclaimer. Sultihi ko kung okay na!
+
+
 
