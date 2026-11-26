@@ -266,6 +266,24 @@ def delete_history(hist_id: int):
     conn.close()
     return {"status": "success"}
 
+class BulkDeleteData(BaseModel):
+    ids: list[int]
+
+@app.post("/api/bulk-delete")
+def bulk_delete(data: BulkDeleteData):
+    ids = list(set(data.ids))
+    if not ids:
+        raise HTTPException(status_code=400, detail="No accounts selected")
+    create_backup()  # safety snapshot bago mag-delete
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.executemany("DELETE FROM ban_history WHERE account_pk = ?", [(i,) for i in ids])
+    c.executemany("DELETE FROM accounts WHERE id = ?", [(i,) for i in ids])
+    deleted = c.rowcount
+    conn.commit()
+    conn.close()
+    return {"status": "success", "deleted": deleted}
+
 @app.post("/api/import")
 async def import_csv(file: UploadFile = File(...)):
     contents = await file.read()

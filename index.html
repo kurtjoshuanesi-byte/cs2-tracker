@@ -122,13 +122,25 @@
             </div>
         </div>
 
+        <!-- Bulk Actions Bar -->
+        <div id="bulk-bar" class="hidden mb-3">
+            <div class="flex items-center justify-between gap-3 bg-blue-900/30 border border-blue-700/50 rounded-lg px-4 py-2">
+                <span class="text-sm font-bold text-blue-200"><span id="bulk-count">0</span> selected</span>
+                <div class="flex gap-2">
+                    <button onclick="clearSelection()" class="px-3 py-1.5 text-slate-300 hover:text-white text-sm transition">Clear</button>
+                    <button onclick="bulkDelete()" class="px-4 py-1.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded text-sm shadow-lg transition">Delete selected</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Data Table -->
         <div class="bg-slate-800/80 rounded-xl shadow-2xl overflow-x-auto border border-slate-700 backdrop-blur-sm">
             <table class="w-full table-fixed text-center text-sm">
                 <colgroup>
-                    <col style="width:15%">
-                    <col style="width:13%">
-                    <col style="width:17%">
+                    <col style="width:3%">
+                    <col style="width:14%">
+                    <col style="width:12%">
+                    <col style="width:16%">
                     <col style="width:11%">
                     <col style="width:8%">
                     <col style="width:11%">
@@ -137,6 +149,7 @@
                 </colgroup>
                 <thead class="bg-slate-900 border-b border-slate-700">
                     <tr>
+                        <th class="px-2 py-3"><input type="checkbox" id="select-all" onchange="toggleSelectAll(this.checked)" class="w-4 h-4 accent-blue-500 cursor-pointer align-middle" title="Select all"></th>
                         <th class="px-2 py-3 text-slate-400 font-bold uppercase tracking-wider text-xs">Account ID</th>
                         <th class="px-2 py-3 text-slate-400 font-bold uppercase tracking-wider text-xs">Password</th>
                         <th class="px-2 py-3 text-slate-400 font-bold uppercase tracking-wider text-xs">Email</th>
@@ -517,6 +530,7 @@
             try { await fetch("http://127.0.0.1:8000/api/lock", { method: 'POST' }); } catch (e) {}
             authToken = null;
             accountsData = [];
+            selectedIds.clear();
             document.getElementById('table-body').innerHTML = '';
             document.getElementById('lock-screen').classList.remove('hidden');
             document.getElementById('pin-input').focus();
@@ -734,6 +748,7 @@
 
         function switchTab(tab) {
             currentTab = tab;
+            selectedIds.clear();
             ['all', 'banned', 'ready'].forEach(t => {
                 const btn = document.getElementById(`tab-${t}`);
                 if (t === tab) {
@@ -773,6 +788,7 @@
             try {
                 const res = await fetch(API_URL);
                 accountsData = await res.json();
+                selectedIds = new Set([...selectedIds].filter(id => accountsData.some(a => a.id === id)));
                 updateStats();
                 renderTable();
                 if (!alertsSeeded) seedSentAlerts();
@@ -894,17 +910,23 @@
 
         document.getElementById('searchInput').addEventListener('input', (e) => {
             searchQuery = e.target.value.toLowerCase();
+            selectedIds.clear();
             renderTable();
         });
 
         function renderTable() {
+            renderTableRows();
+            updateBulkBar();
+        }
+
+        function renderTableRows() {
             const tbody = document.getElementById('table-body');
             tbody.innerHTML = '';
             const now = new Date().getTime();
             const processedData = getProcessedData();
 
             if (processedData.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="8" class="p-10 text-center text-slate-500 font-mono italic text-lg">No accounts found</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" class="p-10 text-center text-slate-500 font-mono italic text-lg">No accounts found</td></tr>`;
                 return;
             }
 
@@ -913,6 +935,7 @@
                 let remaining = '<span class="text-green-500/50 text-sm">-</span>';
                 let rowStyle = "hover:bg-slate-700/30 transition-colors";
                 const histLabel = acc.history_count > 0 ? ` (${acc.history_count})` : '';
+                if (selectedIds.has(acc.id)) rowStyle += " bg-blue-900/20";
 
                 if (acc.ban_start && acc.duration_days > 0) {
                     const expTime = new Date(acc.ban_start).getTime() + (acc.duration_days * 24 * 60 * 60 * 1000);
@@ -925,6 +948,7 @@
 
                 tbody.innerHTML += `
                     <tr class="${rowStyle}">
+                        <td class="px-2 py-3"><input type="checkbox" class="w-4 h-4 accent-blue-500 cursor-pointer align-middle" ${selectedIds.has(acc.id) ? 'checked' : ''} onchange="toggleSelect(${acc.id}, this.checked)"></td>
                         <td class="px-2 py-3 text-white font-mono text-sm tracking-wider">
                             <div class="flex items-center justify-center gap-2">
                                 <span class="min-w-0 truncate" title="${escapeHtml(acc.account_id)}">${acc.account_id}</span>
@@ -953,6 +977,59 @@
                     </tr>
                 `;
             });
+        }
+
+        // --- BULK SELECT ---
+        let selectedIds = new Set();
+
+        function toggleSelect(id, checked) {
+            if (checked) selectedIds.add(id); else selectedIds.delete(id);
+            renderTable();
+        }
+
+        function toggleSelectAll(checked) {
+            // Para ra sa mga rows nga makita karon (sumala sa tab ug search)
+            getProcessedData().forEach(acc => {
+                if (checked) selectedIds.add(acc.id); else selectedIds.delete(acc.id);
+            });
+            renderTable();
+        }
+
+        function clearSelection() {
+            selectedIds.clear();
+            renderTable();
+        }
+
+        function updateBulkBar() {
+            const n = selectedIds.size;
+            document.getElementById('bulk-bar').classList.toggle('hidden', n === 0);
+            document.getElementById('bulk-count').innerText = n;
+
+            const visible = getProcessedData();
+            const selectedVisible = visible.filter(a => selectedIds.has(a.id)).length;
+            const allBox = document.getElementById('select-all');
+            allBox.checked = visible.length > 0 && selectedVisible === visible.length;
+            allBox.indeterminate = selectedVisible > 0 && selectedVisible < visible.length;
+        }
+
+        async function bulkDelete() {
+            const ids = [...selectedIds];
+            if (ids.length === 0) return;
+            if (!confirm(`Delete ${ids.length} selected account(s)? Dili na ni mabalik (pero naay auto-backup sa backups/ folder).`)) return;
+            try {
+                const res = await fetch("http://127.0.0.1:8000/api/bulk-delete", {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ids: ids})
+                });
+                if (!res.ok) throw new Error("failed");
+                const result = await res.json();
+                selectedIds.clear();
+                showToast(`Deleted ${result.deleted} account(s)`);
+                fetchAccounts();
+            } catch (e) {
+                showToast("Error deleting accounts", "error");
+            }
         }
 
         // --- BAN HISTORY ---
