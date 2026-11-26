@@ -4,3 +4,4 @@ pywebview
 python-multipart
 pystray
 Pillow
+requests

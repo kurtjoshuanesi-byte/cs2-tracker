@@ -1,6 +1,6 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 import sqlite3
 import uvicorn
@@ -12,18 +12,43 @@ import threading
 import time
 import requests
 import subprocess
+import hashlib
+import hmac
+import secrets
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://127.0.0.1:8000", "http://localhost:8000"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 DB_FILE = "accounts.db"
 BACKUP_DIR = "backups"
+
+# ---------------- PIN HASHING ----------------
+def hash_pin(pin: str, salt: str | None = None) -> str:
+    salt = salt or secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac("sha256", pin.encode("utf-8"), bytes.fromhex(salt), 200_000).hex()
+    return f"pbkdf2${salt}${digest}"
+
+def verify_pin_hash(pin: str, stored: str) -> bool:
+    try:
+        _, salt, digest = stored.split("$")
+    except ValueError:
+        return False
+    candidate = hash_pin(pin, salt).split("$")[2]
+    return hmac.compare_digest(candidate, digest)
+
+def get_stored_pin() -> str:
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT value FROM settings WHERE key='pin'")
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else ""
 
 def init_db():
     print("Checking database...")
@@ -44,13 +69,27 @@ def init_db():
     except sqlite3.OperationalError:
         pass
         
+    # Ban history: mga daan nga ban sa matag account
+    c.execute('''CREATE TABLE IF NOT EXISTS ban_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_pk INTEGER,
+        ban_start TEXT,
+        duration_days INTEGER,
+        archived_at TEXT
+    )''')
+
     # Settings table para sa PIN
     c.execute('''CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
         value TEXT
     )''')
-    # Default PIN kung wala pa
-    c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('pin', '1234')")
+    # PIN: i-hash na. Kung plaintext pa ang daan nga PIN, i-convert nato (parehas gihapon ang PIN).
+    c.execute("SELECT value FROM settings WHERE key='pin'")
+    row = c.fetchone()
+    if row is None:
+        c.execute("INSERT INTO settings (key, value) VALUES ('pin', ?)", (hash_pin('1234'),))
+    elif not row[0].startswith("pbkdf2$"):
+        c.execute("UPDATE settings SET value=? WHERE key='pin'", (hash_pin(row[0]),))
     
     conn.commit()
     conn.close()
@@ -102,12 +141,70 @@ class SettingData(BaseModel):
 class UpdateData(BaseModel):
     url: str
 
+# ---------------- LOCK / SECURITY ----------------
+PROTECTED_KEYS = {"pin"}              # dili pwede basahon o usbon pinaagi sa settings API
+PUBLIC_API_PATHS = {"/api/verify-pin"}  # ang uban tanan kinahanglan naka-unlock
+active_tokens = set()                 # naay token = naka-unlock ang app
+pin_attempts = {"count": 0, "locked_until": 0.0}
+
+class PinData(BaseModel):
+    pin: str
+
+class ChangePinData(BaseModel):
+    current: str
+    new: str
+
+@app.middleware("http")
+async def require_unlock(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/api/") and path not in PUBLIC_API_PATHS and request.method != "OPTIONS":
+        if request.headers.get("X-Auth-Token", "") not in active_tokens:
+            return JSONResponse(status_code=401, content={"detail": "App is locked"})
+    return await call_next(request)
+
+@app.post("/api/verify-pin")
+def verify_pin(data: PinData):
+    now = time.time()
+    if now < pin_attempts["locked_until"]:
+        wait = int(pin_attempts["locked_until"] - now) + 1
+        raise HTTPException(status_code=429, detail=f"Too many attempts. Try again in {wait}s.")
+    if verify_pin_hash(data.pin, get_stored_pin()):
+        pin_attempts["count"] = 0
+        token = secrets.token_urlsafe(32)
+        active_tokens.add(token)
+        return {"status": "success", "token": token}
+    pin_attempts["count"] += 1
+    if pin_attempts["count"] >= 5:
+        pin_attempts["count"] = 0
+        pin_attempts["locked_until"] = now + 30
+    raise HTTPException(status_code=401, detail="Incorrect PIN")
+
+@app.post("/api/lock")
+def lock_app(request: Request):
+    active_tokens.discard(request.headers.get("X-Auth-Token", ""))
+    return {"status": "locked"}
+
+@app.post("/api/change-pin")
+def change_pin(data: ChangePinData):
+    if not verify_pin_hash(data.current, get_stored_pin()):
+        raise HTTPException(status_code=401, detail="Incorrect current PIN")
+    if not (data.new.isdigit() and len(data.new) == 4):
+        raise HTTPException(status_code=400, detail="PIN must be exactly 4 digits")
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('pin', ?)", (hash_pin(data.new),))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
 @app.get("/api/accounts")
 def get_accounts():
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
-    c.execute("SELECT * FROM accounts ORDER BY id DESC")
+    c.execute("""SELECT accounts.*,
+                 (SELECT COUNT(*) FROM ban_history h WHERE h.account_pk = accounts.id) AS history_count
+                 FROM accounts ORDER BY id DESC""")
     rows = [dict(row) for row in c.fetchall()]
     conn.close()
     return rows
@@ -126,17 +223,45 @@ def add_account(acc: Account):
 def update_account(acc_id: int, acc: Account):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
+    # Kung nakabutang na'y ban ug gi-ilisan sa bag-ong Ban Start, i-save ang daan sa history
+    c.execute("SELECT ban_start, duration_days FROM accounts WHERE id=?", (acc_id,))
+    old = c.fetchone()
+    archived = False
+    if old and old[0] and (old[1] or 0) > 0 and acc.ban_start and acc.ban_start != old[0]:
+        c.execute("INSERT INTO ban_history (account_pk, ban_start, duration_days, archived_at) VALUES (?, ?, ?, ?)",
+                  (acc_id, old[0], old[1], datetime.datetime.now().isoformat(timespec="seconds")))
+        archived = True
     c.execute('''UPDATE accounts SET account_id=?, password=?, email=?, ban_start=?, duration_days=?, notes=? WHERE id=?''',
               (acc.account_id, acc.password, acc.email, acc.ban_start, acc.duration_days, acc.notes, acc_id))
     conn.commit()
     conn.close()
-    return {"status": "success"}
+    return {"status": "success", "archived": archived}
 
 @app.delete("/api/accounts/{acc_id}")
 def delete_account(acc_id: int):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("DELETE FROM accounts WHERE id = ?", (acc_id,))
+    c.execute("DELETE FROM ban_history WHERE account_pk = ?", (acc_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
+@app.get("/api/accounts/{acc_id}/history")
+def get_history(acc_id: int):
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("SELECT id, ban_start, duration_days, archived_at FROM ban_history WHERE account_pk = ? ORDER BY id DESC", (acc_id,))
+    rows = [dict(row) for row in c.fetchall()]
+    conn.close()
+    return rows
+
+@app.delete("/api/history/{hist_id}")
+def delete_history(hist_id: int):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("DELETE FROM ban_history WHERE id = ?", (hist_id,))
     conn.commit()
     conn.close()
     return {"status": "success"}
@@ -182,6 +307,8 @@ async def import_csv(file: UploadFile = File(...)):
 
 @app.get("/api/settings/{key}")
 def get_setting(key: str):
+    if key in PROTECTED_KEYS:
+        raise HTTPException(status_code=403, detail="This setting is protected")
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("SELECT value FROM settings WHERE key=?", (key,))
@@ -193,6 +320,8 @@ def get_setting(key: str):
 
 @app.post("/api/settings")
 def update_setting(data: SettingData):
+    if data.key in PROTECTED_KEYS:
+        raise HTTPException(status_code=403, detail="This setting is protected")
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (data.key, data.value))
@@ -248,4 +377,4 @@ def read_root():
         return f.read()
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)

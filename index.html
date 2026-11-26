@@ -27,7 +27,7 @@
         input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); }
     </style>
 </head>
-<body class="p-6 min-h-screen relative">
+<body class="p-4 min-h-screen relative">
 
     <!-- UPDATE BANNER -->
     <div id="update-banner" class="hidden bg-blue-600 text-white px-4 py-2 text-center text-sm font-bold shadow-lg fixed top-0 left-0 w-full z-[60] flex justify-center items-center gap-4">
@@ -65,7 +65,7 @@
     </div>
 
     <!-- MAIN APP CONTAINER -->
-    <div class="max-w-7xl mx-auto pb-10 mt-4">
+    <div class="max-w-[1600px] mx-auto pb-10 mt-4">
         <!-- Header -->
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
@@ -124,19 +124,29 @@
 
         <!-- Data Table -->
         <div class="bg-slate-800/80 rounded-xl shadow-2xl overflow-x-auto border border-slate-700 backdrop-blur-sm">
-            <table class="w-full text-center text-sm whitespace-nowrap">
+            <table class="w-full table-fixed text-center text-sm">
+                <colgroup>
+                    <col style="width:15%">
+                    <col style="width:13%">
+                    <col style="width:17%">
+                    <col style="width:11%">
+                    <col style="width:8%">
+                    <col style="width:11%">
+                    <col style="width:10%">
+                    <col style="width:15%">
+                </colgroup>
                 <thead class="bg-slate-900 border-b border-slate-700">
                     <tr>
-                        <th class="p-4 text-slate-400 font-bold uppercase tracking-wider text-xs">Account ID</th>
-                        <th class="p-4 text-slate-400 font-bold uppercase tracking-wider text-xs">Password</th>
-                        <th class="p-4 text-slate-400 font-bold uppercase tracking-wider text-xs">Email</th>
-                        <th class="p-4 text-slate-400 font-bold uppercase tracking-wider text-xs">Ban Start</th>
-                        <th class="p-4 text-slate-400 font-bold uppercase tracking-wider text-xs">Status</th>
-                        <th class="p-4 text-slate-400 font-bold uppercase tracking-wider text-xs cursor-pointer hover:text-white transition" onclick="toggleSort()">
+                        <th class="px-2 py-3 text-slate-400 font-bold uppercase tracking-wider text-xs">Account ID</th>
+                        <th class="px-2 py-3 text-slate-400 font-bold uppercase tracking-wider text-xs">Password</th>
+                        <th class="px-2 py-3 text-slate-400 font-bold uppercase tracking-wider text-xs">Email</th>
+                        <th class="px-2 py-3 text-slate-400 font-bold uppercase tracking-wider text-xs">Ban Start</th>
+                        <th class="px-2 py-3 text-slate-400 font-bold uppercase tracking-wider text-xs">Status</th>
+                        <th class="px-2 py-3 text-slate-400 font-bold uppercase tracking-wider text-xs cursor-pointer hover:text-white transition" onclick="toggleSort()">
                             Remaining <span id="sort-icon" class="text-slate-500 ml-1">↓</span>
                         </th>
-                        <th class="p-4 text-slate-400 font-bold uppercase tracking-wider text-xs">Notes</th>
-                        <th class="p-4 text-slate-400 font-bold uppercase tracking-wider text-xs">Action</th>
+                        <th class="px-2 py-3 text-slate-400 font-bold uppercase tracking-wider text-xs">Notes</th>
+                        <th class="px-2 py-3 text-slate-400 font-bold uppercase tracking-wider text-xs">Action</th>
                     </tr>
                 </thead>
                 <tbody id="table-body" class="divide-y divide-slate-700/50"></tbody>
@@ -255,29 +265,96 @@
         </div>
     </div>
 
+    <!-- Ban History Modal -->
+    <div id="history-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity">
+        <div class="bg-slate-800 p-6 rounded-xl w-full max-w-lg border border-slate-600 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h2 class="text-xl font-bold text-white">Ban History</h2>
+            <p id="history-account" class="text-slate-400 text-sm font-mono mb-4"></p>
+            <div id="history-current" class="bg-slate-900 border border-blue-700/40 rounded-lg px-3 py-2 text-sm font-mono text-slate-200 mb-4"></div>
+            <h3 class="text-sm font-bold text-blue-400 mb-2 uppercase tracking-wide">Past bans</h3>
+            <div id="history-list" class="space-y-2"></div>
+            <div class="flex justify-end mt-5">
+                <button onclick="closeHistory()" class="px-5 py-2 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded transition text-sm">Close</button>
+            </div>
+        </div>
+    </div>
+
     <div id="toast-container" class="fixed bottom-4 right-4 z-[110] flex flex-col gap-2"></div>
 
     <script>
+        // --- AUTH TOKEN ---
+        // Ang server mohatag ug token kung husto ang PIN. Gi-send ni sa tanang /api/ requests
+        // sa atong local server (dili sa GitHub o sa ubang site).
+        let authToken = null;
+        const _origFetch = window.fetch.bind(window);
+        window.fetch = (url, opts = {}) => {
+            if (authToken && typeof url === 'string' && url.startsWith("http://127.0.0.1:8000/")) {
+                opts = { ...opts, headers: { ...(opts.headers || {}), 'X-Auth-Token': authToken } };
+            }
+            return _origFetch(url, opts);
+        };
+
         // --- VERSION CONTROL ---
         const CURRENT_VERSION = "1.4.0"; 
         const GITHUB_REPO = "kurtjoshuanesi-byte/cs2-tracker";
         let latestDownloadUrl = null;
 
         // --- APP SETTINGS STATE ---
-        let appPin = "1234";
         let soundEnabled = true;
         let dndEnabled = false;
         let dndStart = "22:00";
         let dndEnd = "07:00";
 
         // --- NOTIFICATION TRACKER ---
-        // Para dili mo-sige balik-balik ang alert kada segundo
-        let sentAlerts = {
-            "1d": new Set(),
-            "2h": new Set(),
-            "10m": new Set(),
-            "ready": new Set()
-        };
+        // Gi-save sa database (settings) ang alerts nga nahimo na, para dili mo-balik
+        // ang parehas nga alert kada open/unlock sa app.
+        // Key format: "tipo|account id|expiry time" (kung ma-edit ang ban time, bag-o na ang key)
+        let sentAlerts = new Set();
+        let alertsSeeded = false; // true kung naa na'y gi-save nga history sa database
+
+        function alertKey(type, acc, expTime) {
+            return `${type}|${acc.id}|${expTime}`;
+        }
+
+        function pruneSentAlerts() {
+            // Tangtangon ang mga key sa accounts nga na-delete o na-edit na
+            const validTails = new Set();
+            accountsData.forEach(acc => {
+                if (acc.ban_start && acc.duration_days > 0) {
+                    const expTime = new Date(acc.ban_start).getTime() + (acc.duration_days * 24 * 60 * 60 * 1000);
+                    validTails.add(`${acc.id}|${expTime}`);
+                }
+            });
+            sentAlerts = new Set([...sentAlerts].filter(k => validTails.has(k.split('|').slice(1).join('|'))));
+        }
+
+        async function saveSentAlerts() {
+            try {
+                await fetch("http://127.0.0.1:8000/api/settings", {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({key: 'sent_alerts', value: JSON.stringify([...sentAlerts])})
+                });
+            } catch (e) { console.error("Could not save alert history"); }
+        }
+
+        // Sa unang higayon human ning update: i-mark nga "sent" na ang mga alert nga
+        // lapas na na, para dili mo-spam ang tanang expired accounts.
+        function seedSentAlerts() {
+            const nowMs = new Date().getTime();
+            accountsData.forEach(acc => {
+                if (acc.ban_start && acc.duration_days > 0) {
+                    const expTime = new Date(acc.ban_start).getTime() + (acc.duration_days * 24 * 60 * 60 * 1000);
+                    const diff = expTime - nowMs;
+                    if (diff <= 86400000) sentAlerts.add(alertKey("1d", acc, expTime));
+                    if (diff <= 7200000) sentAlerts.add(alertKey("2h", acc, expTime));
+                    if (diff <= 600000) sentAlerts.add(alertKey("10m", acc, expTime));
+                    if (diff <= 0) sentAlerts.add(alertKey("ready", acc, expTime));
+                }
+            });
+            alertsSeeded = true;
+            saveSentAlerts();
+        }
 
         window.addEventListener('DOMContentLoaded', () => {
             const displayVersion = `v${CURRENT_VERSION}`;
@@ -299,16 +376,30 @@
         });
 
         // --- UPDATE CHECKER LOGIC ---
+        // Husto nga compare sa version numbers (1.10.0 mas dako kaysa 1.4.0)
+        function isNewerVersion(latest, current) {
+            const a = String(latest).split('.').map(n => parseInt(n, 10) || 0);
+            const b = String(current).split('.').map(n => parseInt(n, 10) || 0);
+            const len = Math.max(a.length, b.length);
+            for (let i = 0; i < len; i++) {
+                const x = a[i] || 0;
+                const y = b[i] || 0;
+                if (x > y) return true;
+                if (x < y) return false;
+            }
+            return false;
+        }
+
         async function checkForUpdates() {
             try {
                 const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
                 if (!res.ok) return;
                 
                 const data = await res.json();
-                const latestVersion = data.tag_name.replace('v', '');
+                const latestVersion = data.tag_name.replace(/^v/i, '');
                 const dismissedVersion = localStorage.getItem('dismissed_version');
 
-                if (latestVersion > CURRENT_VERSION && latestVersion !== dismissedVersion) {
+                if (isNewerVersion(latestVersion, CURRENT_VERSION) && latestVersion !== dismissedVersion) {
                     const banner = document.getElementById('update-banner');
                     if (data.assets && data.assets.length > 0) {
                         latestDownloadUrl = data.assets[0].browser_download_url;
@@ -362,10 +453,6 @@
         // --- FETCH SETTINGS ---
         async function fetchSettings() {
             try {
-                // PIN
-                const resPin = await fetch("http://127.0.0.1:8000/api/settings/pin");
-                if (resPin.ok) appPin = (await resPin.json()).value;
-
                 // Sound
                 const resSound = await fetch("http://127.0.0.1:8000/api/settings/sound_enabled");
                 if (resSound.ok) soundEnabled = (await resSound.json()).value === "true";
@@ -383,24 +470,54 @@
                 if (resEnd.ok) dndEnd = (await resEnd.json()).value;
 
             } catch (e) { console.error("Could not fetch settings"); }
+
+            // Alert history (aron dili mo-balik ang alerts)
+            try {
+                const resSent = await fetch("http://127.0.0.1:8000/api/settings/sent_alerts");
+                if (resSent.ok) {
+                    sentAlerts = new Set(JSON.parse((await resSent.json()).value));
+                    alertsSeeded = true;
+                }
+            } catch (e) { console.error("Could not fetch alert history"); }
         }
 
         // --- LOCK LOGIC ---
-        function unlockApp() {
+        async function unlockApp() {
             const input = document.getElementById('pin-input').value;
-            if (input === appPin) {
-                document.getElementById('lock-screen').classList.add('hidden');
-                document.getElementById('pin-error').classList.add('hidden');
-                document.getElementById('pin-input').value = '';
-                fetchAccounts();
-            } else {
-                document.getElementById('pin-error').classList.remove('hidden');
-                document.getElementById('pin-input').value = '';
-                document.getElementById('pin-input').focus();
+            const errorEl = document.getElementById('pin-error');
+            try {
+                const res = await fetch("http://127.0.0.1:8000/api/verify-pin", {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({pin: input})
+                });
+                if (res.ok) {
+                    authToken = (await res.json()).token;
+                    document.getElementById('lock-screen').classList.add('hidden');
+                    errorEl.classList.add('hidden');
+                    document.getElementById('pin-input').value = '';
+                    await fetchSettings();
+                    fetchAccounts();
+                    return;
+                }
+                let msg = "Incorrect PIN. Try again.";
+                if (res.status === 429) {
+                    msg = (await res.json()).detail || "Too many attempts. Please wait.";
+                }
+                errorEl.innerText = msg;
+            } catch (e) {
+                errorEl.innerText = "Cannot reach the app server.";
             }
+            errorEl.classList.remove('hidden');
+            document.getElementById('pin-input').value = '';
+            document.getElementById('pin-input').focus();
         }
 
-        function lockApp() {
+        async function lockApp() {
+            try { await fetch("http://127.0.0.1:8000/api/lock", { method: 'POST' }); } catch (e) {}
+            authToken = null;
+            accountsData = [];
+            document.getElementById('table-body').innerHTML = '';
             document.getElementById('lock-screen').classList.remove('hidden');
             document.getElementById('pin-input').focus();
         }
@@ -444,17 +561,28 @@
 
             // Check if user is trying to change PIN
             if (newPin || confirm || current) {
-                if (current !== appPin) {
-                    document.getElementById('settings-error').innerText = "Incorrect current PIN.";
+                if (newPin !== confirm || !/^\d{4}$/.test(newPin)) {
+                    document.getElementById('settings-error').innerText = "New PINs do not match or must be exactly 4 digits.";
                     document.getElementById('settings-error').classList.remove('hidden');
                     return;
                 }
-                if (newPin !== confirm || newPin.length !== 4) {
-                    document.getElementById('settings-error').innerText = "New PINs do not match or invalid length.";
+                try {
+                    const resPin = await fetch("http://127.0.0.1:8000/api/change-pin", {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({current: current, new: newPin})
+                    });
+                    if (!resPin.ok) {
+                        document.getElementById('settings-error').innerText =
+                            resPin.status === 401 ? "Incorrect current PIN." : "Could not change PIN.";
+                        document.getElementById('settings-error').classList.remove('hidden');
+                        return;
+                    }
+                } catch (e) {
+                    document.getElementById('settings-error').innerText = "Cannot reach the app server.";
                     document.getElementById('settings-error').classList.remove('hidden');
                     return;
                 }
-                appPin = newPin;
             }
 
             // Save notifications settings
@@ -473,7 +601,6 @@
                     });
                 };
 
-                await saveToDb('pin', appPin);
                 await saveToDb('sound_enabled', soundEnabled);
                 await saveToDb('dnd_enabled', dndEnabled);
                 await saveToDb('dnd_start', dndStart);
@@ -541,6 +668,8 @@
                 }
             }
 
+            let changed = false;
+
             accountsData.forEach(acc => {
                 if (acc.ban_start && acc.duration_days > 0) {
                     const expTime = new Date(acc.ban_start).getTime() + (acc.duration_days * 24 * 60 * 60 * 1000);
@@ -549,31 +678,32 @@
                     // Kung DND, ayaw lang sa i-trigger, unya na kung human sa DND
                     if (inDnd) return;
 
+                    const fire = (type, label, message) => {
+                        const key = alertKey(type, acc, expTime);
+                        if (sentAlerts.has(key)) return;
+                        triggerAlert(acc, label, message);
+                        sentAlerts.add(key);
+                        changed = true;
+                    };
+
                     // 1 Day (86,400,000 ms)
-                    if (diff > 7200000 && diff <= 86400000 && !sentAlerts["1d"].has(acc.id)) {
-                        triggerAlert(acc, "1 Day", "ready in 1 day");
-                        sentAlerts["1d"].add(acc.id);
-                    }
-                    
+                    if (diff > 7200000 && diff <= 86400000) fire("1d", "1 Day", "ready in 1 day");
+
                     // 2 Hours (7,200,000 ms)
-                    if (diff > 600000 && diff <= 7200000 && !sentAlerts["2h"].has(acc.id)) {
-                        triggerAlert(acc, "2 Hours", "ready in 2 hours");
-                        sentAlerts["2h"].add(acc.id);
-                    }
+                    if (diff > 600000 && diff <= 7200000) fire("2h", "2 Hours", "ready in 2 hours");
 
                     // 10 Minutes (600,000 ms)
-                    if (diff > 0 && diff <= 600000 && !sentAlerts["10m"].has(acc.id)) {
-                        triggerAlert(acc, "10 Minutes", "ready in 10 minutes!");
-                        sentAlerts["10m"].add(acc.id);
-                    }
+                    if (diff > 0 && diff <= 600000) fire("10m", "10 Minutes", "ready in 10 minutes!");
 
                     // Expired / Ready Now
-                    if (diff <= 0 && !sentAlerts["ready"].has(acc.id)) {
-                        triggerAlert(acc, "Ready Now", "is now ready to play!");
-                        sentAlerts["ready"].add(acc.id);
-                    }
+                    if (diff <= 0) fire("ready", "Ready Now", "is now ready to play!");
                 }
             });
+
+            if (changed) {
+                pruneSentAlerts();
+                saveSentAlerts();
+            }
         }
 
         // --- APP LOGIC ---
@@ -645,6 +775,7 @@
                 accountsData = await res.json();
                 updateStats();
                 renderTable();
+                if (!alertsSeeded) seedSentAlerts();
                 checkAlerts(); // Initial check
             } catch (err) {
                 showToast("Failed to fetch data", "error");
@@ -781,6 +912,7 @@
                 let status = '<span class="text-green-400 font-bold text-sm drop-shadow-[0_0_5px_rgba(34,197,94,0.6)]">READY</span>';
                 let remaining = '<span class="text-green-500/50 text-sm">-</span>';
                 let rowStyle = "hover:bg-slate-700/30 transition-colors";
+                const histLabel = acc.history_count > 0 ? ` (${acc.history_count})` : '';
 
                 if (acc.ban_start && acc.duration_days > 0) {
                     const expTime = new Date(acc.ban_start).getTime() + (acc.duration_days * 24 * 60 * 60 * 1000);
@@ -793,33 +925,113 @@
 
                 tbody.innerHTML += `
                     <tr class="${rowStyle}">
-                        <td class="p-4 text-white font-mono text-sm tracking-wider">
+                        <td class="px-2 py-3 text-white font-mono text-sm tracking-wider">
                             <div class="flex items-center justify-center gap-2">
-                                <span>${acc.account_id}</span>
-                                <svg onclick="copyText('${acc.account_id}', this)" class="copy-btn w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                <span class="min-w-0 truncate" title="${escapeHtml(acc.account_id)}">${acc.account_id}</span>
+                                <svg onclick="copyText('${acc.account_id}', this)" class="copy-btn w-4 h-4 text-slate-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                             </div>
                         </td>
-                        <td class="p-4 text-slate-400 font-mono text-sm">
+                        <td class="px-2 py-3 text-slate-400 font-mono text-sm">
                             <div class="flex items-center justify-center gap-2">
-                                <span id="pass-${acc.id}">••••••••</span>
-                                <svg onclick="togglePassword(this, ${acc.id})" class="copy-btn w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
-                                <svg onclick="copyText('${acc.password}', this)" class="copy-btn w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                <span class="min-w-0 truncate" id="pass-${acc.id}">••••••••</span>
+                                <svg onclick="togglePassword(this, ${acc.id})" class="copy-btn w-4 h-4 text-slate-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                                <svg onclick="copyText('${acc.password}', this)" class="copy-btn w-4 h-4 text-slate-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                             </div>
                         </td>
-                        <td class="p-4 text-slate-400 font-mono text-sm">${acc.email}</td>
-                        <td class="p-4 text-slate-300 font-mono text-sm">${formatBanStart(acc.ban_start)}</td>
-                        <td class="p-4">${status}</td>
-                        <td class="p-4">${remaining}</td>
-                        <td class="p-4 text-slate-400 font-mono text-sm truncate max-w-[150px]" title="${acc.notes || ''}">${acc.notes || '-'}</td>
-                        <td class="p-4">
-                            <div class="flex items-center justify-center gap-3">
-                                <button onclick="editAccount(${acc.id})" class="text-blue-400 hover:text-blue-300 font-bold text-xs uppercase transition px-2">Edit</button>
-                                <button onclick="deleteAccount(${acc.id})" class="text-slate-500 hover:text-red-400 font-bold text-xs uppercase transition px-2">Delete</button>
+                        <td class="px-2 py-3 text-slate-400 font-mono text-sm truncate" title="${escapeHtml(acc.email)}">${acc.email}</td>
+                        <td class="px-2 py-3 text-slate-300 font-mono text-sm">${formatBanStart(acc.ban_start)}</td>
+                        <td class="px-2 py-3">${status}</td>
+                        <td class="px-2 py-3">${remaining}</td>
+                        <td class="px-2 py-3 text-slate-400 font-mono text-sm truncate" title="${acc.notes || ''}">${acc.notes || '-'}</td>
+                        <td class="px-2 py-3">
+                            <div class="flex flex-wrap items-center justify-center gap-x-1 gap-y-1">
+                                <button onclick="editAccount(${acc.id})" class="text-blue-400 hover:text-blue-300 font-bold text-xs uppercase transition px-1">Edit</button>
+                                <button onclick="openHistory(${acc.id})" class="text-slate-400 hover:text-white font-bold text-xs uppercase transition px-1">History${histLabel}</button>
+                                <button onclick="deleteAccount(${acc.id})" class="text-slate-500 hover:text-red-400 font-bold text-xs uppercase transition px-1">Delete</button>
                             </div>
                         </td>
                     </tr>
                 `;
             });
+        }
+
+        // --- BAN HISTORY ---
+        let historyAccId = null;
+
+        function escapeHtml(str) {
+            return String(str ?? '').replace(/[&<>"']/g, ch => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch]));
+        }
+
+        function formatDateTimeMs(ms) {
+            const d = new Date(ms);
+            if (isNaN(d.getTime())) return '-';
+            return d.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+
+        async function openHistory(accId) {
+            const acc = accountsData.find(a => a.id === accId);
+            if (!acc) return;
+            historyAccId = accId;
+            document.getElementById('history-account').innerText = acc.account_id;
+
+            const currentEl = document.getElementById('history-current');
+            if (acc.ban_start && acc.duration_days > 0) {
+                const startMs = new Date(acc.ban_start).getTime();
+                const endMs = startMs + acc.duration_days * 24 * 60 * 60 * 1000;
+                currentEl.innerHTML = `<span class="text-slate-400">Current ban:</span> ${escapeHtml(formatDateTimeMs(startMs))} <span class="text-slate-500">&middot;</span> ${acc.duration_days} day(s) <span class="text-slate-500">&middot; ends</span> ${escapeHtml(formatDateTimeMs(endMs))}`;
+            } else {
+                currentEl.innerHTML = '<span class="text-slate-400">No active ban.</span>';
+            }
+            document.getElementById('history-modal').classList.remove('hidden');
+            await loadHistory();
+        }
+
+        async function loadHistory() {
+            const listEl = document.getElementById('history-list');
+            listEl.innerHTML = '<p class="text-slate-500 text-sm font-mono">Loading...</p>';
+            try {
+                const res = await fetch(`${API_URL}/${historyAccId}/history`);
+                if (!res.ok) throw new Error("failed");
+                const rows = await res.json();
+                if (rows.length === 0) {
+                    listEl.innerHTML = '<p class="text-slate-500 text-sm italic">No past bans yet. Kung mag-butang ka og bag-ong Ban Start sa account nga naa nay ban, ma-save diri ang daan nga ban.</p>';
+                    return;
+                }
+                listEl.innerHTML = rows.map(r => {
+                    const startMs = new Date(r.ban_start).getTime();
+                    const endMs = startMs + (r.duration_days || 0) * 24 * 60 * 60 * 1000;
+                    const startText = isNaN(startMs) ? r.ban_start : formatDateTimeMs(startMs);
+                    const endText = isNaN(endMs) ? '' : ` &middot; ended ${escapeHtml(formatDateTimeMs(endMs))}`;
+                    return `
+                        <div class="flex items-center justify-between bg-slate-900 border border-slate-700 rounded-lg px-3 py-2">
+                            <div class="text-sm font-mono">
+                                <div class="text-slate-200">${escapeHtml(startText)}</div>
+                                <div class="text-slate-500 text-xs">${Number(r.duration_days) || 0} day(s)${endText}</div>
+                            </div>
+                            <button onclick="deleteHistory(${Number(r.id)})" class="text-slate-500 hover:text-red-400 font-bold text-xs uppercase transition px-2">Remove</button>
+                        </div>`;
+                }).join('');
+            } catch (e) {
+                listEl.innerHTML = '<p class="text-red-400 text-sm">Could not load history.</p>';
+            }
+        }
+
+        async function deleteHistory(histId) {
+            if (!confirm("Remove this ban from history?")) return;
+            try {
+                const res = await fetch(`http://127.0.0.1:8000/api/history/${histId}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error("failed");
+                showToast("History entry removed");
+                await loadHistory();
+                fetchAccounts();
+            } catch (e) {
+                showToast("Error removing history", "error");
+            }
+        }
+
+        function closeHistory() {
+            document.getElementById('history-modal').classList.add('hidden');
+            historyAccId = null;
         }
 
         function openModal() {
@@ -846,11 +1058,6 @@
             document.getElementById('duration').value = acc.duration_days;
             document.getElementById('notes').value = acc.notes || '';
             
-            // Tangtanga sa sent alerts kay basin na-change ang time
-            sentAlerts["1d"].delete(acc.id);
-            sentAlerts["2h"].delete(acc.id);
-            sentAlerts["10m"].delete(acc.id);
-            sentAlerts["ready"].delete(acc.id);
 
             document.getElementById('modal').classList.remove('hidden');
         }
@@ -871,13 +1078,20 @@
             if(!data.account_id) return showToast("Account ID is required", "error");
 
             try {
+                let res;
                 if (editId) {
-                    await fetch(`${API_URL}/${editId}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
+                    res = await fetch(`${API_URL}/${editId}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
                 } else {
-                    await fetch(API_URL, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
+                    res = await fetch(API_URL, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
                 }
+                if (!res.ok) throw new Error("save failed");
+                const result = await res.json();
                 closeModal();
-                showToast(editId ? "Account updated" : "Account added");
+                if (editId) {
+                    showToast(result.archived ? "Account updated. Daan nga ban na-save sa History" : "Account updated");
+                } else {
+                    showToast("Account added");
+                }
                 fetchAccounts();
             } catch (err) {
                 showToast("Error saving account", "error");
@@ -889,11 +1103,6 @@
                 await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
                 showToast("Account deleted");
                 
-                // Clear from alerts
-                sentAlerts["1d"].delete(id);
-                sentAlerts["2h"].delete(id);
-                sentAlerts["10m"].delete(id);
-                sentAlerts["ready"].delete(id);
 
                 fetchAccounts();
             }
@@ -957,15 +1166,9 @@
         }, 1000);
 
         // --- INITIAL LOAD ---
-        window.addEventListener('DOMContentLoaded', async () => {
-            await fetchSettings(); 
-            checkForUpdates(); 
-
-            if (document.getElementById('lock-screen').classList.contains('hidden')) {
-                fetchAccounts();
-            } else {
-                document.getElementById('pin-input').focus();
-            }
+        window.addEventListener('DOMContentLoaded', () => {
+            checkForUpdates();
+            document.getElementById('pin-input').focus();
         });
     </script>
 </body>
