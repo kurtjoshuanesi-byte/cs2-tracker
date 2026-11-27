@@ -113,9 +113,9 @@ def create_backup():
             writer.writerow(["account_id", "email", "password", "ban_start", "duration_days", "notes"])
             writer.writerows(rows)
         conn.close()
-        print(f"✅ Auto-backup created: {filename}")
+        print("Backup created: " + filename)
     except Exception as e:
-        print(f"❌ Backup failed: {e}")
+        print("Backup failed: " + str(e))
 
 def backup_worker():
     while True:
