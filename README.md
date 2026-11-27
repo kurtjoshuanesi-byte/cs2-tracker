@@ -5,11 +5,9 @@
 
 </p>
 
-# CS2 Account Tracker
+# Counter Strike 2 Account Tracker
 
 A local-first desktop/web app for tracking CS2 G2G account bans and cooldowns. Keep your accounts organized and never miss a cooldown expiration again.
-
-![CS2 Tracker Preview](app.ico)
 
 ## Features
 - **PIN Lock Security:** Protects your data with a 4-digit PIN. The PIN is stored as a salted hash and checked by the server, and the API stays locked until the correct PIN is entered. 5 wrong attempts trigger a 30-second lockout. Includes a manual lock button.
