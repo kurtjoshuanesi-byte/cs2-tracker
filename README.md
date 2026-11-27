@@ -1,3 +1,10 @@
+<p align="center">
+
+<img width="4000" height="2250" alt="Untitled design (1)-1" src="https://github.com/user-attachments/assets/4059eeb9-0882-4283-b069-c442158d298c" />
+<img width="4000" height="2250" alt="Untitled design-1" src="https://github.com/user-attachments/assets/673cfe7b-7b3f-4f42-ab25-9e1b2f4b2046" />
+
+</p>
+
 # CS2 Account Tracker
 
 A local-first desktop/web app for tracking CS2 G2G account bans and cooldowns. Keep your accounts organized and never miss a cooldown expiration again.
